@@ -111,35 +111,49 @@ class NeuroAudioEngine {
         if (!this.voiceAnalyzer) return;
 
         this.voiceDetectionActive = true;
-        
+        this.isVocalizing = false;
+        this.lastOnsetAudioTime = 0;
+        this.onVoiceOnset = null;
+        this.onBeat = null;
+
         const analyzeVoice = () => {
             if (!this.voiceDetectionActive) return;
 
             const waveform = this.voiceAnalyzer.getValue();
-            
-            // Calculate voice volume (RMS)
+
+            // Calculate voice volume (Root Mean Square)
             let sum = 0;
             for (let i = 0; i < waveform.length; i++) {
                 sum += waveform[i] * waveform[i];
             }
             this.voiceVolume = Math.sqrt(sum / waveform.length);
 
-            // Detect voice activity (threshold-based)
-            const voiceThreshold = 0.01;
-            if (this.voiceVolume > voiceThreshold) {
-                const currentTime = Tone.now();
-                this.lastVoiceTime = currentTime;
-                
-                // Record voice timing for rhythm analysis
-                this.voiceRhythm.push(currentTime);
-                
-                // Keep only recent voice events (last 10 seconds)
-                this.voiceRhythm = this.voiceRhythm.filter(time => 
-                    currentTime - time < 10
-                );
+            // Real State-Based Voice Onset Detection (Silence -> Vocalization Transition)
+            const activeThreshold = 0.015;
+            const silenceThreshold = 0.008;
+            const debounceSeconds = 0.200; // 200ms refractory period to avoid multiple triggers on sustained syllable
+            const currentTime = Tone.now();
 
-                // Calculate synchronization accuracy
-                this.calculateVoiceSyncAccuracy();
+            if (this.voiceVolume > activeThreshold) {
+                this.lastVoiceTime = currentTime;
+
+                if (!this.isVocalizing && (currentTime - this.lastOnsetAudioTime > debounceSeconds)) {
+                    // True Voice Onset detected!
+                    this.isVocalizing = true;
+                    this.lastOnsetAudioTime = currentTime;
+                    const confidence = Math.min(1.0, this.voiceVolume * 20);
+
+                    // Notify authoritative session controller
+                    if (this.onVoiceOnset) {
+                        this.onVoiceOnset({ confidence: confidence });
+                    }
+                    if (window.currentSession && typeof window.currentSession.recordPerformanceEvent === 'function') {
+                        window.currentSession.recordPerformanceEvent('voice', confidence);
+                    }
+                }
+            } else if (this.voiceVolume < silenceThreshold) {
+                // Returned to silence
+                this.isVocalizing = false;
             }
 
             requestAnimationFrame(analyzeVoice);
@@ -148,39 +162,16 @@ class NeuroAudioEngine {
         analyzeVoice();
     }
 
-    calculateVoiceSyncAccuracy() {
-        if (this.voiceRhythm.length < 2) return;
-
-        const beatInterval = 60 / this.bpm; // seconds per beat
-        const recentVoices = this.voiceRhythm.slice(-5); // Last 5 voice events
-        
-        let totalDeviation = 0;
-        let validComparisons = 0;
-
-        for (let i = 1; i < recentVoices.length; i++) {
-            const actualInterval = recentVoices[i] - recentVoices[i-1];
-            const deviation = Math.abs(actualInterval - beatInterval);
-            
-            if (deviation < beatInterval * 0.5) { // Only count if within reasonable range
-                totalDeviation += deviation;
-                validComparisons++;
-            }
-        }
-
-        if (validComparisons > 0) {
-            const avgDeviation = totalDeviation / validComparisons;
-            const maxDeviation = beatInterval * 0.2; // 20% of beat interval
-            this.voiceSyncAccuracy = Math.max(0, 100 * (1 - avgDeviation / maxDeviation));
-        }
-    }
-
     getVoiceSyncAccuracy() {
-        return Math.round(this.voiceSyncAccuracy);
+        if (window.currentSession && window.currentSession.currentAccuracy !== null) {
+            return window.currentSession.currentAccuracy;
+        }
+        return null;
     }
 
     isVoiceActive() {
         const currentTime = Tone.now();
-        return (currentTime - this.lastVoiceTime) < 1.0; // Voice active within last second
+        return (currentTime - this.lastVoiceTime) < 0.6; // Voice active within last 600ms
     }
 
     getVoiceVolume() {
@@ -207,6 +198,14 @@ class NeuroAudioEngine {
                 default: // metronome
                     this.synth.triggerAttackRelease("C5", "8n", time);
                     break;
+            }
+
+            // Record expected beat for rhythm synchronization
+            if (window.currentSession && typeof window.currentSession.recordExpectedBeat === 'function') {
+                window.currentSession.recordExpectedBeat();
+            }
+            if (this.onBeat) {
+                this.onBeat();
             }
 
             // Trigger beat visual callback if set

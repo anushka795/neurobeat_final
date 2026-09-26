@@ -121,20 +121,14 @@
                                 <tr>
                                     <td>{{ session.start_time.strftime('%m/%d/%Y') }}</td>
                                     <td>{{ session.session_type.replace('_', ' ').title() }}</td>
+                                    <td>{{ session.duration_seconds|format_duration }}</td>
                                     <td>
-                                        {% if session.duration_seconds %}
-                                            {{ (session.duration_seconds // 60) }}m {{ (session.duration_seconds % 60) }}s
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if session.accuracy_score %}
+                                        {% if session.accuracy_score is not none %}
                                             <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
                                                 {{ session.accuracy_score|round|int }}%
                                             </span>
                                         {% else %}
-                                            -
+                                            <span class="badge bg-secondary">N/A</span>
                                         {% endif %}
                                     </td>
                                     <td>

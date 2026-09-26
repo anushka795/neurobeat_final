@@ -172,6 +172,19 @@ a:hover {
     box-shadow: 0 0 0 3px rgba(1, 170, 197, 0.25);
 }
 
+#themeToggleIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+#themeToggleIcon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
 /* Navigation bar */
 .navbar {
     background-color: var(--navbar-bg) !important;
@@ -1116,5 +1129,101 @@ footer svg {
     .beat-visualizer {
         width: 120px !important;
         height: 120px !important;
+    }
+}
+
+/* ==========================================================================
+   Clinical Report Print Styling (@media print)
+   ========================================================================== */
+.print-only-header {
+    display: none;
+}
+
+@media print {
+    /* Hide all non-printable dashboard chrome */
+    body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        font-size: 11pt !important;
+    }
+
+    nav.navbar,
+    footer,
+    .modal-backdrop,
+    .btn,
+    .btn-close,
+    .modal-footer,
+    #btnCopyReport,
+    #btnPrintReport,
+    .theme-toggle-btn,
+    .no-print {
+        display: none !important;
+    }
+
+    /* Make modal content full page without margins or shadows */
+    .modal {
+        position: static !important;
+        display: block !important;
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+
+    .modal-dialog {
+        max-width: 100% !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .modal-content {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+
+    .modal-body {
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    .modal-header {
+        border-bottom: 2px solid #0f172a !important;
+        padding: 0 0 12pt 0 !important;
+        margin-bottom: 16pt !important;
+    }
+
+    .modal-header .btn-close {
+        display: none !important;
+    }
+
+    /* Print header letterhead */
+    .print-only-header {
+        display: block !important;
+        margin-bottom: 16pt;
+    }
+
+    .card {
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+        margin-bottom: 12pt !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+    }
+
+    .soap-cards-stack .card {
+        border-left-width: 4px !important;
+    }
+
+    /* Ensure text colors are high contrast */
+    .text-theme-adaptive,
+    .text-muted,
+    p, span, h4, h5, h6, strong {
+        color: #0f172a !important;
+    }
+
+    .badge {
+        border: 1px solid #64748b !important;
+        color: #0f172a !important;
+        background: #f1f5f9 !important;
     }
 }

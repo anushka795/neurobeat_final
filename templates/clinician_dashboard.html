@@ -55,13 +55,7 @@
                 <div class="card h-100">
                     <div class="card-body text-center">
                         <i data-feather="activity" class="mb-2" style="width: 28px; height: 28px;"></i>
-                        <h4>
-                            {% set total_sessions = 0 %}
-                            {% for patient in patients %}
-                                {% set total_sessions = total_sessions + patient.sessions|length %}
-                            {% endfor %}
-                            {{ total_sessions }}
-                        </h4>
+                        <h4>{{ total_sessions }}</h4>
                         <p class="text-muted mb-0 small">Total Sessions</p>
                     </div>
                 </div>
@@ -174,8 +168,9 @@
                                     <td>
                                         {% if patient.sessions %}
                                             {% set completed_sessions = patient.sessions|selectattr('completed', 'equalto', True)|list %}
-                                            {% if completed_sessions %}
-                                                {% set avg_acc = (completed_sessions|sum(attribute='accuracy_score'))/completed_sessions|length %}
+                                            {% set valid_acc_sessions = completed_sessions|selectattr('accuracy_score', 'ne', none)|list if completed_sessions else [] %}
+                                            {% if valid_acc_sessions %}
+                                                {% set avg_acc = (valid_acc_sessions|sum(attribute='accuracy_score'))/valid_acc_sessions|length %}
                                                 <span class="badge {% if avg_acc >= 80 %}bg-success{% elif avg_acc >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
                                                     {{ avg_acc|round|int }}%
                                                 </span>
@@ -390,16 +385,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i data-feather="info" class="me-2"></i>
+                        <strong>Important:</strong> After creating the patient account, please share the login credentials with your patient so they can access their dashboard and begin therapy sessions.
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-success">Create Patient</button>
-                </div>
-                <div class="modal-body border-top">
-                    <div class="alert alert-info">
-                        <i data-feather="info" class="me-2"></i>
-                        <strong>Important:</strong> After creating the patient account, please share the login credentials with your patient so they can access their dashboard and begin therapy sessions.
-                    </div>
                 </div>
             </form>
         </div>
@@ -523,13 +517,214 @@ function openAiReportModal(patientId, patientName) {
     generateAiReport();
 }
 
-async function generateAiReport() {
+let currentStructuredReportData = null;
+
+function renderStructuredReport(data) {
+    if (!data) return '<p class="text-muted">No report data generated.</p>';
+
+    function esc(s) {
+        if (!s) return '';
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function fmtDur(seconds) {
+        if (!seconds) return 'N/A';
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
+    const activity = esc(data.activity_type || 'Rehabilitation Session');
+    const durStr = fmtDur(data.duration_seconds);
+    const startBpm = data.initial_bpm ? `${Math.round(data.initial_bpm)} BPM` : 'N/A';
+    const finalBpm = data.final_bpm ? `${Math.round(data.final_bpm)} BPM` : 'N/A';
+    const avgBpm = data.avg_bpm ? `${Math.round(data.avg_bpm)} BPM` : (data.final_bpm ? `${Math.round(data.final_bpm)} BPM` : 'N/A');
+    const targetBpm = data.target_bpm ? `${Math.round(data.target_bpm)} BPM` : 'N/A';
+    const accStr = data.accuracy_score !== null && data.accuracy_score !== undefined ? `${Math.round(data.accuracy_score)}%` : 'Adherence Established';
+    const movementCount = data.movement_count || 'Recorded';
+
+    let html = `
+    <!-- Print-only Hospital Header -->
+    <div class="print-only-header text-center pb-3 border-bottom mb-4">
+        <h3 class="fw-bold mb-1" style="color: #042046;">NEUROBEAT &bull; CLINICAL REHABILITATION REPORT</h3>
+        <p class="text-muted small mb-0">Confidential Medical Documentation &bull; AI-Assisted Rehabilitation Telemetry</p>
+    </div>
+
+    <!-- 1. Objective Session Summary (Deterministic Layer 1) -->
+    <div class="card border-0 shadow-sm mb-4" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+        <div class="card-header bg-transparent border-bottom py-3">
+            <h6 class="fw-bold mb-0 text-theme-adaptive">
+                <i data-feather="activity" class="me-2 text-primary" style="width: 18px; height: 18px;"></i>
+                SESSION SUMMARY & OBJECTIVE METRICS
+            </h6>
+        </div>
+        <div class="card-body p-3">
+            <div class="row g-2 text-center mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.06); border: 1px solid rgba(1, 170, 197, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">ACTIVITY</small>
+                        <strong class="text-theme-adaptive small">${activity}</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.06); border: 1px solid rgba(1, 170, 197, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">DURATION</small>
+                        <strong class="text-theme-adaptive small">${durStr}</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">ACCURACY</small>
+                        <strong class="text-success small">${accStr}</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded" style="background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.15);">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">CADENCE (BPM)</small>
+                        <strong class="text-theme-adaptive small">${startBpm} &rarr; ${finalBpm}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-2 rounded mb-0" style="background: rgba(1, 170, 197, 0.03); border-left: 3px solid #01aac5;">
+                <p class="mb-0 small text-theme-adaptive" style="line-height: 1.6;">${esc(data.summary)}</p>
+            </div>
+        </div>
+    </div>`;
+
+    // 2. What You Did
+    if (data.what_you_did && data.what_you_did.length > 0) {
+        html += `
+        <div class="card border-0 shadow-sm mb-3" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2 text-theme-adaptive small text-uppercase" style="letter-spacing: 0.5px;">
+                    <i data-feather="check-circle" class="me-1 text-success" style="width: 15px; height: 15px;"></i>
+                    What You Did
+                </h6>
+                <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.7;">
+                    ${data.what_you_did.map(item => `<li>${esc(item)}</li>`).join('')}
+                </ul>
+            </div>
+        </div>`;
+    }
+
+    // 3. Observations & Areas to Improve
+    const obs = data.performance_observations || [];
+    const imp = data.what_to_improve || [];
+    if (obs.length > 0 || imp.length > 0) {
+        html += `
+        <div class="row g-3 mb-3">
+            ${obs.length > 0 ? `
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold mb-2 text-theme-adaptive small text-uppercase" style="letter-spacing: 0.5px;">
+                            <i data-feather="eye" class="me-1 text-info" style="width: 15px; height: 15px;"></i>
+                            Performance Observations
+                        </h6>
+                        <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.6;">
+                            ${obs.map(item => `<li>${esc(item)}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>` : ''}
+
+            ${imp.length > 0 ? `
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold mb-2 text-theme-adaptive small text-uppercase" style="letter-spacing: 0.5px;">
+                            <i data-feather="trending-up" class="me-1 text-warning" style="width: 15px; height: 15px;"></i>
+                            What To Improve Next Time
+                        </h6>
+                        <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.6;">
+                            ${imp.map(item => `<li>${esc(item)}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>` : ''}
+        </div>`;
+    }
+
+    // 4. Clinical Recommendations
+    if (data.recommendations && data.recommendations.length > 0) {
+        html += `
+        <div class="card border-0 shadow-sm mb-4" style="background: rgba(1, 170, 197, 0.04); border-left: 4px solid #01aac5 !important; border: 1px solid rgba(1, 170, 197, 0.2);">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2 small text-uppercase" style="color: #01aac5; letter-spacing: 0.5px;">
+                    <i data-feather="compass" class="me-1" style="width: 15px; height: 15px;"></i>
+                    Clinical Recommendations
+                </h6>
+                <ul class="mb-0 ps-3 text-theme-adaptive small" style="line-height: 1.6;">
+                    ${data.recommendations.map(item => `<li>${esc(item)}</li>`).join('')}
+                </ul>
+            </div>
+        </div>`;
+    }
+
+    // 5. Professional SOAP Progress Note
+    const soap = data.soap || {};
+    html += `
+    <div class="card border-0 shadow-sm mb-3" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0) !important;">
+        <div class="card-header bg-transparent border-bottom py-2">
+            <span class="badge" style="background: rgba(99, 102, 241, 0.12); color: #6366f1; font-weight: 700; font-size: 0.78rem;">
+                SOAP PROGRESS NOTE
+            </span>
+        </div>
+        <div class="card-body p-3">
+            <div class="soap-cards-stack d-flex flex-column gap-2">
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #01aac5 !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; font-weight: 700; font-size: 0.78rem;">S &bull; SUBJECTIVE</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.subjective || 'Patient completed auditory-motor session without distress.')}</p>
+                </div>
+
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #10b981 !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; font-size: 0.78rem;">O &bull; OBJECTIVE</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.objective || 'Objective session metrics recorded.')}</p>
+                </div>
+
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #f59e0b !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-weight: 700; font-size: 0.78rem;">A &bull; ASSESSMENT</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.assessment || 'Motor adaptation proceeding as prescribed.')}</p>
+                </div>
+
+                <div class="p-3 rounded" style="background: var(--card-bg, #ffffff); border-left: 4px solid #6366f1 !important; border: 1px solid var(--border-color, #e2e8f0);">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #6366f1; font-weight: 700; font-size: 0.78rem;">P &bull; PLAN</span>
+                    </div>
+                    <p class="mb-0 text-theme-adaptive small" style="line-height: 1.6;">${esc(soap.plan || 'Continue rhythmic auditory stimulation protocol.')}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Footer -->
+    <div class="d-flex justify-content-between align-items-center small text-muted pt-2 border-top">
+        <span>Engine: <code class="text-theme-adaptive">${esc(data.ai_model || 'gemini-3.5-flash-lite')}</code> ${data.cached ? '<span class="badge bg-secondary ms-1">Cached</span>' : '<span class="badge bg-success ms-1">Live</span>'}</span>
+        <span>Stored: ${esc(data.created_at || new Date().toLocaleString())}</span>
+    </div>`;
+
+    return html;
+}
+
+async function generateAiReport(forceRefresh = false) {
     if (!currentAiPatientId) return;
     
     const loadingEl = document.getElementById('aiReportLoading');
     const contentEl = document.getElementById('aiReportContent');
     const errorEl = document.getElementById('aiReportError');
-    const textEl = document.getElementById('aiReportText');
+    const containerEl = document.getElementById('aiReportFormattedContainer');
     const timeEl = document.getElementById('aiReportTimestamp');
     
     loadingEl.style.display = 'block';
@@ -538,7 +733,8 @@ async function generateAiReport() {
     if (typeof feather !== 'undefined') feather.replace();
     
     try {
-        const response = await fetch(`/api/clinician/ai-report/${currentAiPatientId}`, {
+        const url = `/api/clinician/ai-report/${currentAiPatientId}${forceRefresh ? '?refresh=1' : ''}`;
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -547,9 +743,14 @@ async function generateAiReport() {
         
         const data = await response.json();
         
-        if (response.ok && (data.success || data.report)) {
-            textEl.textContent = data.report;
-            timeEl.textContent = `Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`;
+        if (response.ok && (data.success !== false)) {
+            currentStructuredReportData = data;
+            if (containerEl) {
+                containerEl.innerHTML = renderStructuredReport(data);
+            }
+            if (timeEl) {
+                timeEl.textContent = data.created_at ? `Documented: ${data.created_at}` : `Generated: ${new Date().toLocaleDateString()}`;
+            }
             loadingEl.style.display = 'none';
             contentEl.style.display = 'block';
             if (typeof feather !== 'undefined') feather.replace();
@@ -566,8 +767,21 @@ async function generateAiReport() {
 }
 
 function copyAiReport() {
-    const text = document.getElementById('aiReportText').textContent;
-    if (!text) return;
+    if (!currentStructuredReportData) return;
+    const d = currentStructuredReportData;
+    const s = d.soap || {};
+    const text = `NEUROBEAT CLINICAL PROGRESS REPORT\n` +
+        `Activity: ${d.activity_type || 'Rehabilitation'}\n` +
+        `Duration: ${d.duration_seconds || 0}s | Cadence: ${d.initial_bpm || 'N/A'} -> ${d.final_bpm || 'N/A'} BPM | Accuracy: ${d.accuracy_score !== null && d.accuracy_score !== undefined ? d.accuracy_score + '%' : 'Adherence'}\n\n` +
+        `SUMMARY:\n${d.summary || ''}\n\n` +
+        `SOAP PROGRESS NOTE:\n` +
+        `S (Subjective): ${s.subjective || ''}\n` +
+        `O (Objective): ${s.objective || ''}\n` +
+        `A (Assessment): ${s.assessment || ''}\n` +
+        `P (Plan): ${s.plan || ''}\n\n` +
+        `RECOMMENDATIONS:\n` +
+        (d.recommendations ? d.recommendations.map(r => `• ${r}`).join('\n') : '');
+
     navigator.clipboard.writeText(text).then(() => {
         const btn = document.getElementById('btnCopyReport');
         const origHtml = btn.innerHTML;
@@ -581,19 +795,23 @@ function copyAiReport() {
         console.error('Clipboard copy failed:', err);
     });
 }
+
+function printClinicalReport() {
+    window.print();
+}
 </script>
 
-<!-- AI Clinical Report Modal (Gemini Few-Shot) -->
+<!-- AI Clinical Report Modal -->
 <div class="modal fade" id="aiReportModal" tabindex="-1" aria-labelledby="aiReportModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content shadow">
             <div class="modal-header border-bottom">
                 <div>
                     <h5 class="modal-title fw-bold mb-0" id="aiReportModalLabel">
-                        <i data-feather="cpu" class="me-2 text-info"></i>
-                        AI Clinical Report &bull; <span id="aiReportPatientName">Patient</span>
+                        <i data-feather="file-text" class="me-2 text-info"></i>
+                        Clinical Progress Report &bull; <span id="aiReportPatientName">Patient</span>
                     </h5>
-                    <small class="text-muted">Generated via Gemini Few-Shot Structured Clinical Synthesis</small>
+                    <small class="text-muted">Objective Rehabilitation Telemetry & Clinical Documentation</small>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -603,9 +821,9 @@ function copyAiReport() {
                     <div class="spinner-border text-info mb-3" role="status" style="width: 3rem; height: 3rem;">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <h6 class="fw-semibold text-theme-adaptive mb-1">Synthesizing Longitudinal Telemetry...</h6>
+                    <h6 class="fw-semibold text-theme-adaptive mb-1">Synthesizing Rehabilitation Telemetry...</h6>
                     <p class="text-muted small mb-0" style="max-width: 420px; margin: 0 auto;">
-                        Analyzing session trajectories, motor rhythm adherence, cognitive load tolerance, and formatting structured SOAP clinical note.
+                        Analyzing session trajectories, motor rhythm adherence, and formatting clinical documentation.
                     </p>
                 </div>
 
@@ -614,16 +832,12 @@ function copyAiReport() {
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
                             <i data-feather="check-circle" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
-                            Clinical SOAP Format
+                            Structured Clinical Report & SOAP
                         </span>
                         <small class="text-muted" id="aiReportTimestamp"></small>
                     </div>
 
-                    <div class="card border-0" style="background: rgba(1, 170, 197, 0.04); border-left: 4px solid #01aac5 !important;">
-                        <div class="card-body p-3">
-                            <pre id="aiReportText" class="mb-0 text-theme-adaptive" style="white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.925rem; line-height: 1.6;"></pre>
-                        </div>
-                    </div>
+                    <div id="aiReportFormattedContainer"></div>
                 </div>
 
                 <!-- Error State -->
@@ -639,10 +853,13 @@ function copyAiReport() {
             </div>
             <div class="modal-footer border-top">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-primary" id="btnPrintReport" onclick="printClinicalReport()">
+                    <i data-feather="printer" class="me-1"></i> Print Report / SOAP Note
+                </button>
                 <button type="button" class="btn btn-outline-info" id="btnCopyReport" onclick="copyAiReport()">
                     <i data-feather="copy" class="me-1"></i> Copy to Clipboard
                 </button>
-                <button type="button" class="btn btn-primary" onclick="generateAiReport()">
+                <button type="button" class="btn btn-primary" onclick="generateAiReport(true)">
                     <i data-feather="refresh-cw" class="me-1"></i> Regenerate
                 </button>
             </div>

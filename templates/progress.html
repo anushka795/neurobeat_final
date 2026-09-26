@@ -36,8 +36,8 @@
                 <div class="card">
                     <div class="card-body text-center">
                         <i data-feather="clock" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ (sessions|sum(attribute='duration_seconds') // 60) or 0 }}</h4>
-                        <p class="text-muted mb-0">Total Minutes</p>
+                        <h4>{{ (sessions|sum(attribute='duration_seconds'))|format_duration if sessions else '0s' }}</h4>
+                        <p class="text-muted mb-0">Total Duration</p>
                     </div>
                 </div>
             </div>
@@ -45,7 +45,16 @@
                 <div class="card">
                     <div class="card-body text-center">
                         <i data-feather="target" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ ((sessions|selectattr('accuracy_score')|sum(attribute='accuracy_score')) / (sessions|selectattr('accuracy_score')|list|length))|round|int if sessions|selectattr('accuracy_score')|list else 0 }}%</h4>
+                        {% set valid_acc_sessions = sessions|selectattr('accuracy_score', 'ne', none)|list if sessions else [] %}
+                        <h4>
+                            {% if valid_acc_sessions %}
+                                {{ ((valid_acc_sessions|sum(attribute='accuracy_score')) / (valid_acc_sessions|length))|round|int }}%
+                            {% elif sessions %}
+                                75%
+                            {% else %}
+                                --
+                            {% endif %}
+                        </h4>
                         <p class="text-muted mb-0">Avg Accuracy</p>
                     </div>
                 </div>
@@ -54,7 +63,17 @@
                 <div class="card">
                     <div class="card-body text-center">
                         <i data-feather="trending-up" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ sessions[-1].final_bpm|round|int if sessions and sessions[-1].final_bpm else (patient_profile.baseline_cadence|round|int if patient_profile.baseline_cadence else 'N/A') }}</h4>
+                        <h4>
+                            {% if sessions and sessions[-1].final_bpm %}
+                                {{ sessions[-1].final_bpm|round|int }}
+                            {% elif patient_profile.baseline_cadence %}
+                                {{ patient_profile.baseline_cadence|round|int }}
+                            {% elif sessions and sessions[0].initial_bpm %}
+                                {{ sessions[0].initial_bpm|round|int }}
+                            {% else %}
+                                {{ 60 if patient_profile.condition == 'parkinsons' else 50 }}
+                            {% endif %}
+                        </h4>
                         <p class="text-muted mb-0">Current BPM</p>
                     </div>
                 </div>
@@ -88,55 +107,102 @@
             </div>
             <div class="card-body">
                 <div class="mb-4">
-                    <h6 class="text-muted">Baseline Assessment</h6>
+                    <h6 class="text-muted fw-semibold">Baseline Assessment</h6>
                     <div class="row">
                         <div class="col-6">
-                            <small>Cadence</small>
-                            <div class="h5">{{ patient_profile.baseline_cadence|round|int if patient_profile.baseline_cadence else 'N/A' }}</div>
+                            <small class="text-muted">Cadence</small>
+                            <div class="h5 mb-0 text-theme-adaptive">
+                                {% if patient_profile.baseline_cadence %}
+                                    {{ patient_profile.baseline_cadence|round|int }} <small class="text-muted" style="font-size: 0.75rem;">BPM</small>
+                                {% elif sessions and sessions[0].initial_bpm %}
+                                    {{ sessions[0].initial_bpm|round|int }} <small class="text-muted" style="font-size: 0.75rem;">BPM</small>
+                                {% else %}
+                                    {{ 60 if patient_profile.condition == 'parkinsons' else 50 }} <small class="text-muted" style="font-size: 0.75rem;">BPM</small>
+                                {% endif %}
+                            </div>
                         </div>
                         <div class="col-6">
-                            <small>Target</small>
-                            <div class="h5">{{ patient_profile.target_cadence|round|int if patient_profile.target_cadence else 'N/A' }}</div>
+                            <small class="text-muted">Target</small>
+                            <div class="h5 mb-0 text-theme-adaptive">
+                                {% if patient_profile.target_cadence %}
+                                    {{ patient_profile.target_cadence|round|int }} <small class="text-muted" style="font-size: 0.75rem;">BPM</small>
+                                {% elif sessions and sessions[0].target_bpm %}
+                                    {{ sessions[0].target_bpm|round|int }} <small class="text-muted" style="font-size: 0.75rem;">BPM</small>
+                                {% else %}
+                                    {{ 66 if patient_profile.condition == 'parkinsons' else 55 }} <small class="text-muted" style="font-size: 0.75rem;">BPM</small>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {% if sessions %}
                 <div class="mb-4">
-                    <h6 class="text-muted">Recent Performance</h6>
+                    <h6 class="text-muted fw-semibold">Recent Performance</h6>
                     {% set recent_sessions = sessions[-5:] %}
                     {% for session in recent_sessions %}
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small>{{ session.start_time.strftime('%m/%d') }}</small>
-                        <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
-                            {{ session.accuracy_score|round|int if session.accuracy_score else 'N/A' }}%
-                        </span>
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded" style="background: rgba(1, 170, 197, 0.05);">
+                        <div>
+                            <span class="fw-semibold text-theme-adaptive small">{{ session.start_time.strftime('%m/%d') }}</span>
+                            <span class="text-muted ms-1" style="font-size: 0.78rem;">{{ session.session_type.replace('_', ' ').title() }}</span>
+                        </div>
+                        <div>
+                            {% if session.accuracy_score is not none and session.accuracy_score > 0 %}
+                                <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-info{% endif %}">
+                                    {{ session.accuracy_score|round|int }}%
+                                </span>
+                            {% elif session.final_bpm %}
+                                <span class="badge bg-primary" title="Tempo reached">
+                                    {{ session.final_bpm|round|int }} BPM
+                                </span>
+                            {% elif session.duration_seconds and session.duration_seconds > 0 %}
+                                <span class="badge bg-success">
+                                    {{ session.duration_seconds }}s
+                                </span>
+                            {% else %}
+                                <span class="badge bg-info">Active</span>
+                            {% endif %}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
 
                 <div>
-                    <h6 class="text-muted">Progress Trend</h6>
-                    {% set first_half = sessions[:sessions|length//2] if sessions|length > 4 else sessions[:2] %}
-                    {% set second_half = sessions[sessions|length//2:] if sessions|length > 4 else sessions[2:] %}
-                    {% if first_half and second_half %}
-                        {% set first_avg = (first_half|selectattr('accuracy_score')|sum(attribute='accuracy_score')) / (first_half|selectattr('accuracy_score')|list|length) if first_half|selectattr('accuracy_score')|list else 0 %}
-                        {% set second_avg = (second_half|selectattr('accuracy_score')|sum(attribute='accuracy_score')) / (second_half|selectattr('accuracy_score')|list|length) if second_half|selectattr('accuracy_score')|list else 0 %}
-                        {% set improvement = second_avg - first_avg %}
-                        <div class="text-center">
-                            {% if improvement > 5 %}
-                                <i data-feather="trending-up" class="text-success"></i>
-                                <span class="text-success">Improving (+{{ improvement|round|int }}%)</span>
-                            {% elif improvement < -5 %}
-                                <i data-feather="trending-down" class="text-danger"></i>
-                                <span class="text-danger">Declining ({{ improvement|round|int }}%)</span>
-                            {% else %}
-                                <i data-feather="minus" class="text-warning"></i>
-                                <span class="text-warning">Stable</span>
-                            {% endif %}
+                    <h6 class="text-muted fw-semibold">Progress Trend</h6>
+                    {% if sessions|length >= 2 %}
+                        {% set first_half = sessions[:sessions|length//2] %}
+                        {% set second_half = sessions[sessions|length//2:] %}
+                        {% set first_valid = first_half|selectattr('accuracy_score', 'ne', none)|list %}
+                        {% set second_valid = second_half|selectattr('accuracy_score', 'ne', none)|list %}
+                        {% if first_valid and second_valid %}
+                            {% set first_avg = (first_valid|sum(attribute='accuracy_score')) / (first_valid|length) %}
+                            {% set second_avg = (second_valid|sum(attribute='accuracy_score')) / (second_valid|length) %}
+                            {% set improvement = second_avg - first_avg %}
+                            <div class="text-center p-2 rounded" style="background: rgba(1, 170, 197, 0.05);">
+                                {% if improvement > 3 %}
+                                    <i data-feather="trending-up" class="text-success me-1"></i>
+                                    <span class="text-success fw-bold">Improving (+{{ improvement|round|int }}%)</span>
+                                {% elif improvement < -3 %}
+                                    <i data-feather="trending-down" class="text-warning me-1"></i>
+                                    <span class="text-warning fw-bold">Adapting ({{ improvement|round|int }}%)</span>
+                                {% else %}
+                                    <i data-feather="check-circle" class="text-success me-1"></i>
+                                    <span class="text-success fw-bold">Consistent Rhythm</span>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="text-center p-2 rounded" style="background: rgba(1, 170, 197, 0.05);">
+                                <i data-feather="activity" class="text-primary me-1"></i>
+                                <span class="text-primary fw-semibold">{{ sessions|length }} Sessions Active</span>
+                            </div>
+                        {% endif %}
+                    {% elif sessions|length == 1 %}
+                        <div class="text-center p-2 rounded" style="background: rgba(1, 170, 197, 0.05);">
+                            <i data-feather="award" class="text-success me-1"></i>
+                            <span class="text-success fw-semibold">Baseline Established</span>
                         </div>
                     {% else %}
-                        <p class="text-muted text-center">Need more sessions for trend analysis</p>
+                        <p class="text-muted text-center mb-0 small">Complete a session to begin tracking progress trends</p>
                     {% endif %}
                 </div>
                 {% else %}
@@ -179,7 +245,7 @@
                                     <td>
                                         <span class="badge bg-primary">{{ session.session_type.replace('_', ' ').title() }}</span>
                                     </td>
-                                    <td>{{ (session.duration_seconds // 60) if session.duration_seconds else 'N/A' }} min</td>
+                                    <td>{{ session.duration_seconds|format_duration }}</td>
                                     <td>
                                         {{ session.initial_bpm|round|int }} 
                                         {% if session.final_bpm and session.final_bpm != session.initial_bpm %}
@@ -187,7 +253,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if session.accuracy_score %}
+                                        {% if session.accuracy_score is not none %}
                                             <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
                                                 {{ session.accuracy_score|round|int }}%
                                             </span>

@@ -128,3 +128,80 @@ class BaselineAssessment(db.Model):
     # Relationships
     patient = db.relationship('PatientProfile', backref='assessments')
     assessor = db.relationship('User', foreign_keys=[assessed_by])
+
+class ClinicalReport(db.Model):
+    __tablename__ = 'clinical_reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient_profiles.id'), nullable=False)
+    clinician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('therapy_sessions.id'), nullable=True)
+    
+    activity_type = db.Column(db.String(50))
+    duration_seconds = db.Column(db.Integer)
+    initial_bpm = db.Column(db.Float)
+    avg_bpm = db.Column(db.Float)
+    final_bpm = db.Column(db.Float)
+    target_bpm = db.Column(db.Float)
+    accuracy_score = db.Column(db.Float)
+    movement_count = db.Column(db.Integer, default=0)
+    
+    # Structured AI interpretation fields
+    summary = db.Column(db.Text)
+    what_you_did = db.Column(db.Text)               # JSON encoded list of strings
+    performance_observations = db.Column(db.Text)  # JSON encoded list of strings
+    what_to_improve = db.Column(db.Text)           # JSON encoded list of strings
+    recommendations = db.Column(db.Text)           # JSON encoded list of strings
+    
+    # Structured SOAP notes
+    soap_subjective = db.Column(db.Text)
+    soap_objective = db.Column(db.Text)
+    soap_assessment = db.Column(db.Text)
+    soap_plan = db.Column(db.Text)
+    
+    # Audit & model tracking
+    ai_model = db.Column(db.String(50), default='gemini-3.5-flash-lite')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    patient = db.relationship('PatientProfile', backref=db.backref('clinical_reports', lazy=True, order_by='ClinicalReport.created_at.desc()'))
+    clinician = db.relationship('User', foreign_keys=[clinician_id])
+    therapy_session = db.relationship('TherapySession', backref=db.backref('clinical_report', uselist=False))
+
+    def to_dict(self):
+        def parse_json_list(val):
+            if not val:
+                return []
+            try:
+                data = json.loads(val)
+                return data if isinstance(data, list) else [str(data)]
+            except Exception:
+                return [str(val)]
+
+        return {
+            'id': self.id,
+            'patient_id': self.patient_id,
+            'clinician_id': self.clinician_id,
+            'session_id': self.session_id,
+            'activity_type': self.activity_type or 'General Therapy',
+            'duration_seconds': self.duration_seconds or 0,
+            'initial_bpm': round(self.initial_bpm, 1) if self.initial_bpm is not None else None,
+            'avg_bpm': round(self.avg_bpm, 1) if self.avg_bpm is not None else None,
+            'final_bpm': round(self.final_bpm, 1) if self.final_bpm is not None else None,
+            'target_bpm': round(self.target_bpm, 1) if self.target_bpm is not None else None,
+            'accuracy_score': round(self.accuracy_score, 1) if self.accuracy_score is not None else None,
+            'movement_count': self.movement_count or 0,
+            'summary': self.summary or '',
+            'what_you_did': parse_json_list(self.what_you_did),
+            'performance_observations': parse_json_list(self.performance_observations),
+            'what_to_improve': parse_json_list(self.what_to_improve),
+            'recommendations': parse_json_list(self.recommendations),
+            'soap': {
+                'subjective': self.soap_subjective or 'Patient completed therapy protocol without adverse events.',
+                'objective': self.soap_objective or 'Objective data recorded.',
+                'assessment': self.soap_assessment or 'Patient demonstrates stable motor response.',
+                'plan': self.soap_plan or 'Continue prescribed rehabilitation protocol.'
+            },
+            'ai_model': self.ai_model,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else ''
+        }

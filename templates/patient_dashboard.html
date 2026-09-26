@@ -131,12 +131,12 @@
                         </div>
                     </div>
 
-                    <!-- Speech Rhythm -->
+                    <!-- Speech Therapy (Speech Rhythm) -->
                     <div class="col-md-6">
                         <div class="card border-info h-100">
                             <div class="card-body text-center">
                                 <i data-feather="mic" class="mb-3" style="width: 48px; height: 48px; color: #0dcaf0;"></i>
-                                <h5>Speech Rhythm</h5>
+                                <h5>Speech Therapy</h5>
                                 <p class="text-muted">Syllable timing and articulation practice</p>
                                 <small class="text-info">Recommended BPM: 50-90</small>
                                 <br>
@@ -180,13 +180,13 @@
                         </div>
                     </div>
 
-                    <!-- Speech Rhythm -->
+                    <!-- Speech Therapy (Speech Rhythm) -->
                     <div class="col-md-6">
                         <div class="card border-success h-100">
                             <div class="card-body text-center">
                                 <i data-feather="mic" class="mb-3" style="width: 48px; height: 48px; color: #198754;"></i>
-                                <h5>Speech Rhythm</h5>
-                                <p class="text-muted">Practice speech timing and articulation</p>
+                                <h5>Speech Therapy</h5>
+                                <p class="text-muted">Practice speech rhythm, timing, and articulation</p>
                                 <button type="button" class="btn btn-success" onclick="startSession('speech_rhythm')">
                                     Start Session
                                 </button>
@@ -245,6 +245,7 @@
                                     <th>Duration</th>
                                     <th>Accuracy</th>
                                     <th>BPM Range</th>
+                                    <th>Report</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -254,17 +255,26 @@
                                     <td>
                                         <span class="badge bg-primary">{{ session.session_type.replace('_', ' ').title() }}</span>
                                     </td>
-                                    <td>{{ (session.duration_seconds // 60) if session.duration_seconds else 'N/A' }} min</td>
+                                    <td>{{ session.duration_seconds|format_duration }}</td>
                                     <td>
-                                        {% if session.accuracy_score %}
+                                        {% if session.accuracy_score is not none %}
                                             <span class="badge {% if session.accuracy_score >= 80 %}bg-success{% elif session.accuracy_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
                                                 {{ session.accuracy_score|round|int }}%
                                             </span>
                                         {% else %}
-                                            N/A
+                                            <span class="badge bg-secondary">N/A</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ session.initial_bpm|round|int }} - {{ session.final_bpm|round|int if session.final_bpm else session.initial_bpm|round|int }}</td>
+                                    <td>
+                                        {% if session.clinical_report %}
+                                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 0.78rem;" onclick="viewSessionReport({{ session.id }})">
+                                                <i data-feather="file-text" style="width: 12px; height: 12px;"></i> View
+                                            </button>
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -312,14 +322,14 @@
             </div>
             <div class="card-body">
                 <div class="mb-3">
-                    <label class="form-label">Cadence Progress</label>
+                    <label class="form-label">Rhythm Synchronization Progress</label>
                     <div class="progress">
                         <div class="progress-bar" role="progressbar" 
-                             style="width: {{ ((avg_accuracy or 0) / 100 * 75)|round|int }}%">
-                            {{ ((avg_accuracy or 0) / 100 * 75)|round|int }}%
+                             style="width: {{ (avg_accuracy or 0)|round|int }}%">
+                            {{ (avg_accuracy or 0)|round|int }}%
                         </div>
                     </div>
-                    <small class="text-muted">Based on session accuracy</small>
+                    <small class="text-muted">Based on overall session accuracy</small>
                 </div>
 
                 <div class="row text-center">
@@ -459,5 +469,112 @@ async function startStrokeSession(sessionType) {
         alert('Failed to start session: ' + (error.message || 'Please try again.'));
     }
 }
+
+function viewSessionReport(sessionId) {
+    const modalEl = document.getElementById('patientReportModal');
+    const bodyEl = document.getElementById('patientReportModalBody');
+    if (!modalEl || !bodyEl) return;
+
+    bodyEl.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Loading session report...</div>';
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    fetch('/api/session/' + sessionId + '/report')
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                bodyEl.innerHTML = '<div class="alert alert-warning mb-0">' + (data.error || 'No report found') + '</div>';
+                return;
+            }
+            const didList = (data.what_you_did && data.what_you_did.length)
+                ? data.what_you_did.map(i => '<li class="d-flex align-items-start gap-2 mb-1"><span class="text-success mt-1" style="font-size:0.65rem;">●</span><span>' + i + '</span></li>').join('')
+                : '<li class="text-muted small">Completed scheduled therapy interval.</li>';
+
+            const improveList = (data.what_to_improve && data.what_to_improve.length)
+                ? data.what_to_improve.map(i => '<li class="d-flex align-items-start gap-2 mb-1"><span class="text-info mt-1" style="font-size:0.65rem;">●</span><span>' + i + '</span></li>').join('')
+                : '<li class="text-muted small">Maintain steady rhythm synchronization.</li>';
+
+            bodyEl.innerHTML = `
+                <div class="row g-2 text-center mb-3">
+                    <div class="col-4">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                            <div class="small text-muted">Accuracy</div>
+                            <div class="fw-bold" style="color: #01aac5; font-size: 1.2rem;">${data.accuracy_score !== null ? data.accuracy_score + '%' : 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                            <div class="small text-muted">Duration</div>
+                            <div class="fw-bold text-theme-adaptive" style="font-size: 1.2rem;">${Math.floor(data.duration_seconds / 60)}m ${data.duration_seconds % 60}s</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
+                            <div class="small text-muted">Cadence</div>
+                            <div class="fw-bold text-theme-adaptive" style="font-size: 1.2rem;">${Math.round(data.final_bpm || data.avg_bpm || 60)} BPM</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 mb-3" style="background: rgba(1, 170, 197, 0.06); border-left: 4px solid #01aac5 !important; border-radius: 0.75rem;">
+                    <div class="card-body p-3">
+                        <div class="fw-bold small mb-1" style="color: #01aac5;">Summary</div>
+                        <p class="small text-theme-adaptive mb-0" style="line-height: 1.5;">${data.summary || 'Session completed successfully.'}</p>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <i data-feather="check-circle" style="width: 14px; height: 14px; color: #10b981;"></i>
+                        <span class="fw-semibold text-theme-adaptive small">What You Did</span>
+                    </div>
+                    <ul class="list-unstyled mb-0 ps-2 small text-muted" style="line-height: 1.5;">
+                        ${didList}
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <i data-feather="trending-up" style="width: 14px; height: 14px; color: #01aac5;"></i>
+                        <span class="fw-semibold text-theme-adaptive small">Key Improvements & Recommendations</span>
+                    </div>
+                    <ul class="list-unstyled mb-0 ps-2 small text-muted" style="line-height: 1.5;">
+                        ${improveList}
+                    </ul>
+                </div>
+            `;
+            if (typeof feather !== 'undefined') feather.replace();
+        })
+        .catch(err => {
+            bodyEl.innerHTML = '<div class="alert alert-danger mb-0">Error loading report: ' + err.message + '</div>';
+        });
+}
 </script>
+
+<!-- Patient Session Report Modal -->
+<div class="modal fade" id="patientReportModal" tabindex="-1" aria-labelledby="patientReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 540px;">
+        <div class="modal-content shadow border-0" style="border-radius: 1rem;">
+            <div class="modal-header border-bottom pb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i data-feather="file-text" style="width: 20px; height: 20px; color: #01aac5;"></i>
+                    <h5 class="modal-title fw-bold text-theme-adaptive mb-0" id="patientReportModalLabel">Session Report</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="patientReportModalBody">
+                <div class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    Loading session report...
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 justify-content-between">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm px-3" onclick="window.print()">
+                    <i data-feather="printer" class="me-1" style="width: 14px; height: 14px;"></i> Print Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

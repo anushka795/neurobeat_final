@@ -10,9 +10,15 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
                         <h4 class="card-title mb-1">
-                            {% if therapy_session.session_type == 'speech_rhythm' %}
+                            {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
                                 <i data-feather="mic" class="me-2"></i>
-                                Speech Rhythm Session
+                                Speech Therapy Session
+                            {% elif therapy_session.session_type == 'balance_training' %}
+                                <i data-feather="target" class="me-2"></i>
+                                Balance Training Session
+                            {% elif therapy_session.session_type == 'finger_tapping' %}
+                                <i data-feather="move" class="me-2"></i>
+                                Finger Tapping Session
                             {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                 <i data-feather="activity" class="me-2"></i>
                                 Upper Limb Motor Session
@@ -28,8 +34,12 @@
                             {% endif %}
                         </h4>
                         <p class="text-muted mb-0 small">
-                            {% if therapy_session.session_type == 'speech_rhythm' %}
-                                Practice speech rhythm with syllable timing, pronunciation, and visual face framing
+                            {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
+                                Practice speech cadence with syllable timing, articulation, and visual face framing
+                            {% elif therapy_session.session_type == 'balance_training' %}
+                                Improve stability, posture alignment, and balance coordination with rhythmic auditory pacing
+                            {% elif therapy_session.session_type == 'finger_tapping' %}
+                                Enhance fine motor control, finger speed, and coordination with rhythmic beats
                             {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                 Coordinate arm and hand movements with rhythmic beats and camera motion tracking
                             {% elif therapy_session.session_type == 'melodic_intonation' %}
@@ -43,7 +53,7 @@
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
-                            Session #{{ therapy_session.id }} &bull; {{ therapy_session.session_type.replace('_', ' ').title() }}
+                            Session #{{ therapy_session.id }} &bull; {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}Speech Therapy{% else %}{{ therapy_session.session_type.replace('_', ' ').title() }}{% endif %}
                         </span>
                         <span class="badge bg-secondary" id="cameraStatusBadge">
                             <i data-feather="video-off" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
@@ -64,10 +74,14 @@
                                     <i data-feather="video" class="me-1" style="width: 14px; height: 14px;"></i>
                                     {% if therapy_session.session_type == 'gait_trainer' %}
                                         Full-Body / Movement View
+                                    {% elif therapy_session.session_type == 'balance_training' %}
+                                        Postural Balance / Stance View
+                                    {% elif therapy_session.session_type == 'finger_tapping' %}
+                                        Hand & Finger Movement View
                                     {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                         Upper-Body / Arm Movement View
-                                    {% elif therapy_session.session_type == 'speech_rhythm' %}
-                                        Face / User Positioning View
+                                    {% elif therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
+                                        Face / Speech Articulation View
                                     {% elif therapy_session.session_type == 'melodic_intonation' %}
                                         Face & Upper-Body View
                                     {% else %}
@@ -77,10 +91,14 @@
                                 <span class="badge bg-secondary" id="cameraModeBadge">
                                     {% if therapy_session.session_type == 'gait_trainer' %}
                                         Gait Tracking
+                                    {% elif therapy_session.session_type == 'balance_training' %}
+                                        Balance Tracking
+                                    {% elif therapy_session.session_type == 'finger_tapping' %}
+                                        Finger Tracking
                                     {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                         Arm Tracking
-                                    {% elif therapy_session.session_type == 'speech_rhythm' %}
-                                        Face Framing
+                                    {% elif therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
+                                        Speech Tracking
                                     {% elif therapy_session.session_type == 'melodic_intonation' %}
                                         Posture View
                                     {% else %}
@@ -104,9 +122,13 @@
                                     <p class="small text-muted mb-3" style="max-width: 280px;">
                                         {% if therapy_session.session_type == 'gait_trainer' %}
                                             Enable camera to position your full body for real-time movement and gait guidance.
+                                        {% elif therapy_session.session_type == 'balance_training' %}
+                                            Enable camera to position your posture and stance for real-time balance tracking.
+                                        {% elif therapy_session.session_type == 'finger_tapping' %}
+                                            Enable camera to frame your hands for fine motor finger tapping synchronization.
                                         {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                             Enable camera to track arm and hand rhythm synchronization during the session.
-                                        {% elif therapy_session.session_type == 'speech_rhythm' %}
+                                        {% elif therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
                                             Enable camera for face framing guidance alongside your active microphone.
                                         {% elif therapy_session.session_type == 'melodic_intonation' %}
                                             Enable camera for facial and posture alignment during melodic therapy.
@@ -122,13 +144,17 @@
 
                                 <!-- Camera Active Guidance Overlay -->
                                 <div id="cameraOverlay" class="camera-guide-overlay" style="display: none;">
-                                    <div class="camera-guide-frame {% if therapy_session.session_type == 'gait_trainer' %}full-body{% elif therapy_session.session_type == 'upper_limb_motor' %}upper-body{% else %}face-view{% endif %}">
+                                    <div class="camera-guide-frame {% if therapy_session.session_type in ['gait_trainer', 'balance_training'] %}full-body{% elif therapy_session.session_type in ['upper_limb_motor', 'finger_tapping'] %}upper-body{% else %}face-view{% endif %}">
                                         <span class="camera-guide-label-pill">
                                             {% if therapy_session.session_type == 'gait_trainer' %}
                                                 Position Full Body In Frame
+                                            {% elif therapy_session.session_type == 'balance_training' %}
+                                                Align Posture & Stance In Frame
+                                            {% elif therapy_session.session_type == 'finger_tapping' %}
+                                                Frame Hands & Fingers In View
                                             {% elif therapy_session.session_type == 'upper_limb_motor' %}
                                                 Frame Upper Body & Arms
-                                            {% elif therapy_session.session_type == 'speech_rhythm' %}
+                                            {% elif therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
                                                 Align Face In Center
                                             {% elif therapy_session.session_type == 'melodic_intonation' %}
                                                 Frame Face & Posture
@@ -166,8 +192,10 @@
                             <div id="cameraMetricsBar" class="mt-2 pt-2 border-top" style="display: none;">
                                 <div class="d-flex justify-content-between align-items-center small mb-1">
                                     <span class="text-muted" id="cameraMetricLabel">
-                                        {% if therapy_session.session_type in ['gait_trainer', 'upper_limb_motor'] %}
+                                        {% if therapy_session.session_type in ['gait_trainer', 'upper_limb_motor', 'balance_training', 'finger_tapping'] %}
                                             Movement Activity:
+                                        {% elif therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
+                                            Speech Cadence:
                                         {% else %}
                                             Visual Engagement:
                                         {% endif %}
@@ -193,7 +221,7 @@
                                     <div class="border rounded p-2 p-sm-3 h-100">
                                         <h5 id="currentBPM" class="mb-1">{{ therapy_session.initial_bpm|round|int }}</h5>
                                         <small class="text-muted">
-                                            {% if therapy_session.session_type == 'speech_rhythm' %}
+                                            {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
                                                 Current SPM
                                             {% else %}
                                                 Current BPM
@@ -205,7 +233,7 @@
                                     <div class="border rounded p-2 p-sm-3 h-100">
                                         <h5 id="targetBPM" class="mb-1">{{ therapy_session.target_bpm|round|int }}</h5>
                                         <small class="text-muted">
-                                            {% if therapy_session.session_type == 'speech_rhythm' %}
+                                            {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
                                                 Target SPM
                                             {% else %}
                                                 Target BPM
@@ -222,7 +250,7 @@
                                 <div class="col-3">
                                     <div class="border rounded p-2 p-sm-3 h-100">
                                         <h5 id="voiceStatus" class="mb-1">
-                                            {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                                            {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy', 'melodic_intonation'] %}
                                                 <i data-feather="mic-off" id="micIcon" style="width: 16px; height: 16px;"></i>
                                                 <span id="voiceIndicator" style="font-size: 0.85rem;">Silent</span>
                                             {% else %}
@@ -231,7 +259,7 @@
                                             {% endif %}
                                         </h5>
                                         <small class="text-muted">
-                                            {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                                            {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy', 'melodic_intonation'] %}
                                                 Voice Status
                                             {% else %}
                                                 Motion Status
@@ -253,13 +281,13 @@
                         <!-- Beat Visualizer & Volume Meter -->
                         <div class="mb-3 text-center">
                             <div class="row align-items-center justify-content-center">
-                                <div class="{% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}col-7{% else %}col-12{% endif %}">
+                                <div class="{% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy', 'melodic_intonation'] %}col-7{% else %}col-12{% endif %}">
                                     <div id="beatVisualizer" class="mx-auto" style="width: 150px; height: 150px; border: 4px solid var(--neuro-primary-border); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.1s ease;">
                                         <div id="beatIndicator" style="width: 60px; height: 60px; background: var(--neuro-primary); border-radius: 50%; transform: scale(0.8); transition: transform 0.1s ease;">
                                         </div>
                                     </div>
                                 </div>
-                                {% if therapy_session.session_type in ['speech_rhythm', 'melodic_intonation'] %}
+                                {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy', 'melodic_intonation'] %}
                                 <div class="col-5">
                                     <div class="text-center">
                                         <h6 class="small mb-1">Voice Level</h6>
@@ -313,8 +341,12 @@
                 <div class="alert alert-info mt-4 mb-0">
                     <i data-feather="info" class="me-2"></i>
                     <strong>Instructions:</strong> 
-                    {% if therapy_session.session_type == 'speech_rhythm' %}
+                    {% if therapy_session.session_type in ['speech_rhythm', 'speech_therapy'] %}
                         Speak the syllables "TA-TA-TA-TA" in rhythm with the beats. Position your face inside the camera guide and practice vowel sounds and consonant clarity.
+                    {% elif therapy_session.session_type == 'balance_training' %}
+                        Stand tall and shift your weight in sync with each auditory beat. Follow the rhythmic pacing to practice stability, upright posture, and balance coordination.
+                    {% elif therapy_session.session_type == 'finger_tapping' %}
+                        Tap your fingers in precise synchrony with the rhythmic beat. Keep your hands visible in the frame to practice finger tapping speed and fine motor coordination.
                     {% elif therapy_session.session_type == 'upper_limb_motor' %}
                         Move your arms and hands to the rhythm. Keep your upper body and arms visible in the camera frame to track movement synchronization.
                     {% elif therapy_session.session_type == 'melodic_intonation' %}
@@ -353,32 +385,49 @@
 <script src="{{ url_for('static', filename='js/session.js') }}"></script>
 <script>
 // ==================================================
-// Session State & Data
+// Authoritative Session Controller Initialization
 // ==================================================
-let sessionData = {
-    id: {{ therapy_session.id }},
+let chart = null;
+let voiceUpdateInterval = null;
+
+// Initialize single authoritative TherapySession instance
+window.currentSession = new TherapySession({
+    sessionId: {{ therapy_session.id }},
+    sessionType: "{{ therapy_session.session_type }}",
     initialBPM: {{ therapy_session.initial_bpm }},
     targetBPM: {{ therapy_session.target_bpm }},
-    currentBPM: {{ therapy_session.initial_bpm }},
-    sessionType: "{{ therapy_session.session_type }}",
-    isRunning: false,
-    startTime: null,
-    duration: 0,
-    accuracyScore: 0,
-    bpmHistory: [],
-    accuracyHistory: [],
     selectedBeatSound: 'metronome',
-    voiceEnabled: false,
     aiAdjustmentEnabled: true,
-    cameraEnabled: false,
-    cameraSyncAccuracy: 0,
-    faceFramed: false
-};
-
-let sessionTimer = null;
-let updateInterval = null;
-let voiceUpdateInterval = null;
-let chart = null;
+    onStartAudio: function(bpm) {
+        if (typeof startAudioEngine === 'function') {
+            startAudioEngine(bpm);
+        }
+    },
+    onStopAudio: function() {
+        if (typeof stopAudioEngine === 'function') {
+            stopAudioEngine();
+        }
+    },
+    onAdjustAudioTempo: function(bpm) {
+        if (typeof adjustAudioTempo === 'function') {
+            adjustAudioTempo(bpm);
+        }
+    },
+    onStartCamera: function() {
+        if (isCameraActive) {
+            startCameraProcessing();
+        }
+    },
+    onPauseCamera: function() {
+        pauseCameraProcessing();
+    },
+    onStopCamera: function() {
+        stopCamera();
+    },
+    onUpdateChart: function() {
+        updateChart();
+    }
+});
 
 // ==================================================
 // Camera Lifecycle Management
@@ -388,6 +437,9 @@ let cameraProcessingInterval = null;
 let lastFrameData = null;
 let motionHistory = [];
 let isCameraActive = false;
+let prevDiffScore = 0;
+let isMotionRising = false;
+let lastMotionEventTime = 0;
 
 async function enableCamera() {
     const alertDiv = document.getElementById('cameraAlert');
@@ -414,7 +466,6 @@ async function enableCamera() {
 
         cameraStream = stream;
         isCameraActive = true;
-        sessionData.cameraEnabled = true;
 
         const videoEl = document.getElementById('cameraFeed');
         videoEl.srcObject = stream;
@@ -434,19 +485,18 @@ async function enableCamera() {
 
         const statusText = document.getElementById('cameraLiveStatusText');
         statusText.className = 'ms-1 text-success fw-bold';
-        statusText.textContent = sessionData.isRunning ? 'Active & Tracking' : 'Active (Ready)';
+        statusText.textContent = (window.currentSession && window.currentSession.isActive) ? 'Active & Tracking' : 'Active (Ready)';
 
         // Start processing if session is already running
-        if (sessionData.isRunning) {
+        if (window.currentSession && window.currentSession.isActive) {
             startCameraProcessing();
         }
 
         feather.replace();
-        console.log('Webcam enabled successfully for session:', sessionData.id);
+        console.log('Webcam enabled successfully for session:', window.currentSession ? window.currentSession.sessionId : '');
     } catch (err) {
         console.error('Camera access error:', err);
         isCameraActive = false;
-        sessionData.cameraEnabled = false;
 
         let message = 'Unable to access camera.';
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
@@ -492,9 +542,10 @@ function stopCamera() {
     }
 
     isCameraActive = false;
-    sessionData.cameraEnabled = false;
     lastFrameData = null;
     motionHistory = [];
+    isMotionRising = false;
+    prevDiffScore = 0;
 
     const videoEl = document.getElementById('cameraFeed');
     if (videoEl) {
@@ -580,7 +631,7 @@ function resumeCameraProcessing() {
 }
 
 function processCameraFrame() {
-    if (!sessionData.isRunning || !isCameraActive) return;
+    if (!window.currentSession || !window.currentSession.isActive || !isCameraActive) return;
 
     const videoEl = document.getElementById('cameraFeed');
     const canvas = document.getElementById('cameraCanvas');
@@ -618,26 +669,33 @@ function processCameraFrame() {
     // Update real-time UI meter
     updateCameraMeter(diffScore);
 
-    // Session-specific processing
-    const type = sessionData.sessionType;
+    // Objective Motion Event Detection (kinematic impulse detection without modulo or random values)
+    const type = window.currentSession.sessionType;
     if (type === 'gait_trainer' || type === 'upper_limb_motor') {
-        motionHistory.push({ time: Date.now(), score: diffScore });
-        if (motionHistory.length > 30) motionHistory.shift();
-
-        // Calculate prototype movement rhythm synchronization
-        if (diffScore > 12) {
-            // Patient is moving rhythmically; estimate sync with current BPM
-            const simulatedSync = Math.min(95, Math.max(68, Math.round(76 + (diffScore % 19))));
-            sessionData.cameraSyncAccuracy = simulatedSync;
-            updateVoiceOrMotionIndicator(true, 'Active');
+        const nowSec = performance.now() / 1000.0;
+        
+        if (diffScore > 14) {
+            if (diffScore > prevDiffScore) {
+                isMotionRising = true;
+            } else if (isMotionRising && diffScore < prevDiffScore && prevDiffScore >= 16) {
+                // Peak identified - foot contact or arm stroke apex
+                isMotionRising = false;
+                if (nowSec - lastMotionEventTime > 0.25) { // 250ms refractory debounce
+                    lastMotionEventTime = nowSec;
+                    const confidence = Math.min(1.0, prevDiffScore / 50.0);
+                    const eventType = (type === 'gait_trainer') ? 'step' : 'arm_movement';
+                    window.currentSession.recordPerformanceEvent(eventType, confidence);
+                    updateVoiceOrMotionIndicator(true, 'Motion Detected');
+                }
+            }
+            prevDiffScore = diffScore;
         } else {
-            sessionData.cameraSyncAccuracy = Math.max(50, sessionData.cameraSyncAccuracy - 2);
-            updateVoiceOrMotionIndicator(false, 'Waiting Movement');
+            isMotionRising = false;
+            prevDiffScore = diffScore;
+            if (nowSec - lastMotionEventTime > 2.0) {
+                updateVoiceOrMotionIndicator(false, 'Waiting for movement');
+            }
         }
-    } else if (type === 'speech_rhythm' || type === 'melodic_intonation') {
-        // Face view: verify presence and alignment
-        const isEngaged = diffScore > 4 || true;
-        sessionData.faceFramed = isEngaged;
     }
 }
 
@@ -653,8 +711,8 @@ function updateVoiceOrMotionIndicator(isActive, text) {
     const micIcon = document.getElementById('micIcon');
     if (!indicator) return;
 
-    if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
-        return; // Handled by existing microphone updateVoiceStatus()
+    if (window.currentSession && (window.currentSession.sessionType === 'speech_rhythm' || window.currentSession.sessionType === 'speech_therapy' || window.currentSession.sessionType === 'melodic_intonation')) {
+        return; // Handled by microphone updateVoiceStatus()
     }
 
     if (isActive) {
@@ -662,12 +720,21 @@ function updateVoiceOrMotionIndicator(isActive, text) {
         indicator.style.color = '#10b981';
         if (micIcon) micIcon.setAttribute('data-feather', 'activity');
     } else {
-        indicator.textContent = text || 'Ready';
+        indicator.textContent = text || 'Waiting for movement';
         indicator.style.color = '#64748b';
         if (micIcon) micIcon.setAttribute('data-feather', 'activity');
     }
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
 }
+
+// Cognitive rhythm keyboard listener (objective response tracking)
+window.addEventListener('keydown', function(e) {
+    if (e.code === 'Space' && window.currentSession && window.currentSession.isActive) {
+        e.preventDefault();
+        window.currentSession.recordPerformanceEvent('cognitive_tap', 1.0);
+        updateVoiceOrMotionIndicator(true, 'Tapped to Beat');
+    }
+});
 
 // ==================================================
 // Session Lifecycle & Page Init
@@ -677,18 +744,21 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeAudio().then((success) => {
             if (success) {
                 if (audioEngine && typeof audioEngine.setSessionType === 'function') {
-                    audioEngine.setSessionType(sessionData.sessionType);
+                    audioEngine.setSessionType(window.currentSession.sessionType);
                 }
                 
                 // Only show microphone alert if speech or melodic therapy session
-                if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
+                if (window.currentSession.sessionType === 'speech_rhythm' || window.currentSession.sessionType === 'speech_therapy' || window.currentSession.sessionType === 'melodic_intonation') {
                     checkMicrophonePermission();
                 }
             }
         });
     }
     initializeChart();
-    feather.replace();
+    if (window.currentSession) {
+        window.currentSession.updateUI();
+    }
+    if (typeof feather !== 'undefined') feather.replace();
 });
 
 async function checkMicrophonePermission() {
@@ -725,13 +795,12 @@ function showMicrophonePermissionAlert() {
     }
 }
 
-// Voice monitoring update function (Maintained exactly for speech and melodic therapy)
+// Voice monitoring update function (Maintained cleanly for speech and melodic therapy)
 function updateVoiceStatus() {
     if (!audioEngine) return;
     
     const isVoiceActive = audioEngine.isVoiceActive();
     const voiceVolume = audioEngine.getVoiceVolume();
-    const voiceSyncAccuracy = audioEngine.getVoiceSyncAccuracy();
     
     const micIcon = document.getElementById('micIcon');
     const voiceIndicator = document.getElementById('voiceIndicator');
@@ -739,7 +808,7 @@ function updateVoiceStatus() {
     if (isVoiceActive) {
         if (micIcon) micIcon.setAttribute('data-feather', 'mic');
         if (voiceIndicator) {
-            voiceIndicator.textContent = 'Active';
+            voiceIndicator.textContent = 'Voice Detected';
             voiceIndicator.style.color = '#10b981';
         }
     } else {
@@ -756,12 +825,7 @@ function updateVoiceStatus() {
         volumeIndicator.style.height = `${100 - volumePercentage}%`;
     }
     
-    if (voiceSyncAccuracy > 0) {
-        sessionData.accuracyScore = Math.max(sessionData.accuracyScore, voiceSyncAccuracy);
-        updateAccuracyDisplay(sessionData.accuracyScore);
-    }
-    
-    feather.replace();
+    if (typeof feather !== 'undefined') feather.replace();
 }
 
 function initializeChart() {
@@ -801,248 +865,13 @@ function initializeChart() {
     });
 }
 
-function startSession() {
-    sessionData.isRunning = true;
-    sessionData.startTime = new Date();
-    
-    // Update UI controls
-    document.getElementById('startBtn').style.display = 'none';
-    document.getElementById('pauseBtn').style.display = 'inline-block';
-    document.getElementById('stopBtn').style.display = 'inline-block';
-    
-    // Start audio engine
-    if (typeof startAudioEngine === 'function') {
-        startAudioEngine(sessionData.currentBPM);
-    }
-    
-    // Start camera processing if camera is enabled
-    if (isCameraActive) {
-        startCameraProcessing();
-    }
-    
-    // Start intervals
-    sessionTimer = setInterval(updateTimer, 1000);
-    updateInterval = setInterval(updateSession, 5000);
-    if (sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') {
-        voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
-    }
-    
-    console.log('Session started with session ID:', sessionData.id);
-}
-
-function pauseSession() {
-    sessionData.isRunning = false;
-    
-    // Update UI controls
-    document.getElementById('startBtn').style.display = 'inline-block';
-    document.getElementById('pauseBtn').style.display = 'none';
-    document.getElementById('startBtn').innerHTML = '<i data-feather="play" class="me-2"></i>Resume';
-    
-    // Pause audio engine
-    if (typeof stopAudioEngine === 'function') {
-        stopAudioEngine();
-    }
-    
-    // Pause camera processing (do not calculate metrics while paused)
-    pauseCameraProcessing();
-    
-    // Clear timers
-    clearInterval(sessionTimer);
-    clearInterval(updateInterval);
-    if (voiceUpdateInterval) {
-        clearInterval(voiceUpdateInterval);
-    }
-    
-    feather.replace();
-    console.log('Session paused');
-}
-
-function stopSession() {
-    sessionData.isRunning = false;
-    
-    // Stop audio and timers
-    if (typeof stopAudioEngine === 'function') {
-        stopAudioEngine();
-    }
-    clearInterval(sessionTimer);
-    clearInterval(updateInterval);
-    if (voiceUpdateInterval) {
-        clearInterval(voiceUpdateInterval);
-    }
-    
-    // Stop camera completely and release all MediaStream tracks
-    stopCamera();
-    
-    // Calculate final duration
-    const now = new Date();
-    sessionData.duration = sessionData.startTime ? Math.floor((now - sessionData.startTime) / 1000) : 0;
-    
-    // Complete session on server
-    completeSessionOnServer();
-}
-
-async function completeSessionOnServer() {
-    try {
-        const response = await fetch(`/session/${sessionData.id}/complete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                duration: sessionData.duration,
-                final_bpm: sessionData.currentBPM,
-                accuracy_score: sessionData.accuracyScore,
-                notes: `Completed ${sessionData.sessionType.replace('_', ' ')} session. BPM range: ${sessionData.initialBPM} - ${sessionData.currentBPM}. Camera tracking: ${sessionData.cameraEnabled ? 'Enabled' : 'Disabled'}`
-            })
-        });
-        
-        let data = {};
-        try {
-            data = await response.json();
-        } catch (e) {
-            console.warn('Could not parse response JSON:', e);
-        }
-        
-        if (response.ok && (data.success !== false)) {
-            // Populate completion modal elements
-            const accEl = document.getElementById('modalAccuracyScore');
-            const durEl = document.getElementById('modalDuration');
-            const bpmEl = document.getElementById('modalFinalBpm');
-            const feedbackEl = document.getElementById('modalAiFeedback');
-            
-            if (accEl) accEl.textContent = `${Math.round(sessionData.accuracyScore || 0)}%`;
-            if (durEl) durEl.textContent = `${sessionData.duration || 0}s`;
-            if (bpmEl) bpmEl.textContent = Math.round(sessionData.currentBPM || 0);
-            
-            const feedbackText = data.feedback || "Terrific commitment to today's session! Regular rhythmic stimulation supports neuromuscular neuroplasticity.";
-            if (feedbackEl) feedbackEl.textContent = feedbackText;
-            
-            const modalEl = document.getElementById('sessionCompleteModal');
-            if (modalEl && typeof bootstrap !== 'undefined') {
-                const completeModal = new bootstrap.Modal(modalEl);
-                if (typeof feather !== 'undefined') feather.replace();
-                completeModal.show();
-            } else {
-                alert(`Session Completed!\nAccuracy: ${Math.round(sessionData.accuracyScore || 0)}%\nDuration: ${sessionData.duration || 0}s\n\nAI Recovery Coach:\n${feedbackText}`);
-                window.location.href = '/patient/dashboard';
-            }
-        } else {
-            alert('Session completed locally, but failed to sync with server.');
-            window.location.href = '/patient/dashboard';
-        }
-    } catch (error) {
-        console.error('Error completing session:', error);
-        alert('Session completed locally, but failed to sync with server.');
-        window.location.href = '/patient/dashboard';
-    }
-}
-
-function updateTimer() {
-    if (!sessionData.isRunning || !sessionData.startTime) return;
-    
-    const now = new Date();
-    const elapsed = Math.floor((now - sessionData.startTime) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    
-    document.getElementById('sessionTimer').textContent = 
-        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-async function updateSession() {
-    if (!sessionData.isRunning) return;
-    
-    let currentAccuracy;
-    
-    // Calculate accuracy based on session type and active sensors
-    if ((sessionData.sessionType === 'speech_rhythm' || sessionData.sessionType === 'melodic_intonation') && audioEngine && audioEngine.voiceDetectionActive) {
-        const voiceAccuracy = audioEngine.getVoiceSyncAccuracy();
-        currentAccuracy = voiceAccuracy > 0 ? voiceAccuracy : Math.random() * 25 + 72;
-    } else if (isCameraActive && sessionData.cameraSyncAccuracy > 0) {
-        currentAccuracy = sessionData.cameraSyncAccuracy;
-    } else {
-        currentAccuracy = Math.random() * 25 + 70;
-    }
-    
-    sessionData.accuracyScore = currentAccuracy;
-    
-    // AI-powered BPM adjustment
-    let suggestedBPM = sessionData.currentBPM;
-    if (sessionData.aiAdjustmentEnabled) {
-        if (currentAccuracy > 85) {
-            const progressToTarget = (sessionData.targetBPM - sessionData.currentBPM) * 0.1;
-            suggestedBPM = Math.min(sessionData.targetBPM, sessionData.currentBPM + progressToTarget);
-        } else if (currentAccuracy < 60) {
-            suggestedBPM = Math.max(sessionData.initialBPM * 0.8, sessionData.currentBPM - 2);
-        }
-    }
-    
-    try {
-        const response = await fetch('/session/update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                session_id: sessionData.id,
-                current_bpm: sessionData.currentBPM,
-                sync_accuracy: currentAccuracy,
-                suggested_bpm: suggestedBPM,
-                voice_enabled: audioEngine && audioEngine.voiceDetectionActive,
-                camera_enabled: isCameraActive
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            const newBPM = data.adjusted_bpm || suggestedBPM;
-            if (newBPM !== sessionData.currentBPM) {
-                sessionData.currentBPM = newBPM;
-                updateBPMDisplay();
-                if (typeof adjustAudioTempo === 'function') {
-                    adjustAudioTempo(newBPM);
-                }
-            }
-            updateAccuracyDisplay(currentAccuracy);
-            updateChart();
-        }
-    } catch (error) {
-        console.error('Error updating session:', error);
-    }
-}
-
-function updateBPMDisplay() {
-    const el = document.getElementById('currentBPM');
-    if (el) el.textContent = Math.round(sessionData.currentBPM);
-}
-
-function updateAccuracyDisplay(accuracy) {
-    const roundedAccuracy = Math.round(accuracy);
-    const accuracyEl = document.getElementById('accuracy');
-    if (accuracyEl) accuracyEl.textContent = `${roundedAccuracy}%`;
-    
-    const progressBar = document.getElementById('accuracyProgress');
-    if (progressBar) {
-        progressBar.style.width = `${roundedAccuracy}%`;
-        progressBar.textContent = `${roundedAccuracy}% Accuracy`;
-        progressBar.className = 'progress-bar';
-        if (roundedAccuracy >= 80) {
-            progressBar.classList.add('bg-success');
-        } else if (roundedAccuracy >= 60) {
-            progressBar.classList.add('bg-warning');
-        } else {
-            progressBar.classList.add('bg-danger');
-        }
-    }
-}
-
 function updateChart() {
-    if (!chart) return;
-    const now = new Date().toLocaleTimeString();
-    sessionData.bpmHistory.push(sessionData.currentBPM);
+    if (!chart || !window.currentSession) return;
+    const timeLabel = window.currentSession.getFormattedTimer();
+    const bpm = Math.round(window.currentSession.currentBPM);
     
-    chart.data.labels.push(now);
-    chart.data.datasets[0].data.push(sessionData.currentBPM);
+    chart.data.labels.push(timeLabel);
+    chart.data.datasets[0].data.push(bpm);
     
     if (chart.data.labels.length > 20) {
         chart.data.labels.shift();
@@ -1051,69 +880,144 @@ function updateChart() {
     chart.update();
 }
 
+// Authoritative Session Controller delegates
+function startSession() {
+    if (!window.currentSession) return;
+    if (!window.currentSession.isStarted) {
+        window.currentSession.start();
+        if (window.currentSession.sessionType === 'speech_rhythm' || window.currentSession.sessionType === 'speech_therapy' || window.currentSession.sessionType === 'melodic_intonation') {
+            if (!voiceUpdateInterval) {
+                voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
+            }
+        }
+    } else if (!window.currentSession.isActive) {
+        window.currentSession.resume();
+        if (window.currentSession.sessionType === 'speech_rhythm' || window.currentSession.sessionType === 'speech_therapy' || window.currentSession.sessionType === 'melodic_intonation') {
+            if (!voiceUpdateInterval) {
+                voiceUpdateInterval = setInterval(updateVoiceStatus, 100);
+            }
+        }
+    }
+}
+
+function pauseSession() {
+    if (window.currentSession && window.currentSession.isActive) {
+        window.currentSession.pause();
+        if (voiceUpdateInterval) {
+            clearInterval(voiceUpdateInterval);
+            voiceUpdateInterval = null;
+        }
+    }
+}
+
+function stopSession() {
+    if (window.currentSession) {
+        if (voiceUpdateInterval) {
+            clearInterval(voiceUpdateInterval);
+            voiceUpdateInterval = null;
+        }
+        window.currentSession.complete();
+    }
+}
+
 function changeBeatSound() {
     const soundSelect = document.getElementById('beatSoundSelect');
-    if (!soundSelect) return;
+    if (!soundSelect || !window.currentSession) return;
     const selectedSound = soundSelect.value;
-    sessionData.selectedBeatSound = selectedSound;
+    window.currentSession.selectedBeatSound = selectedSound;
     
-    if (sessionData.isRunning && typeof changeSoundType === 'function') {
+    if (typeof changeSoundType === 'function') {
         changeSoundType(selectedSound);
     }
     console.log(`Beat sound changed to: ${selectedSound}`);
 }
 </script>
 
-<!-- Session Complete Modal with AI Recovery Feedback -->
+<!-- Session Complete Modal with Structured AI Report -->
 <div class="modal fade" id="sessionCompleteModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="sessionCompleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content shadow-lg border-0">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 540px;">
+        <div class="modal-content shadow-lg border-0" style="border-radius: 1rem;">
             <div class="modal-header border-0 pb-0 justify-content-center position-relative">
                 <button type="button" class="btn-close position-absolute end-0 top-0 m-3" onclick="window.location.href='/patient/dashboard'" aria-label="Close"></button>
-                <div class="text-center mt-3">
-                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-2" style="width: 58px; height: 58px; background: rgba(1, 170, 197, 0.12); color: #01aac5;">
-                        <i data-feather="award" style="width: 30px; height: 30px;"></i>
+                <div class="text-center mt-2">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-2" style="width: 54px; height: 54px; background: rgba(1, 170, 197, 0.12); color: #01aac5;">
+                        <i data-feather="award" style="width: 28px; height: 28px;"></i>
                     </div>
                     <h4 class="modal-title fw-bold text-theme-adaptive mb-1" id="sessionCompleteModalLabel">Session Completed!</h4>
                     <p class="text-muted small mb-0">Great effort on completing your rhythmic therapy session.</p>
                 </div>
             </div>
             <div class="modal-body px-4 py-3">
+                <!-- Telemetry Row -->
                 <div class="row g-2 text-center mb-3">
                     <div class="col-4">
                         <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
                             <div class="small text-muted">Accuracy</div>
-                            <div class="fw-bold" id="modalAccuracyScore" style="color: #01aac5; font-size: 1.2rem;">--%</div>
+                            <div class="fw-bold" id="modalAccuracyScore" style="color: #01aac5; font-size: 1.25rem;">--%</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
                             <div class="small text-muted">Duration</div>
-                            <div class="fw-bold text-theme-adaptive" id="modalDuration" style="font-size: 1.2rem;">0s</div>
+                            <div class="fw-bold text-theme-adaptive" id="modalDuration" style="font-size: 1.25rem;">0s</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="p-2 rounded" style="background: rgba(1, 170, 197, 0.08);">
                             <div class="small text-muted">Final BPM</div>
-                            <div class="fw-bold text-theme-adaptive" id="modalFinalBpm" style="font-size: 1.2rem;">--</div>
+                            <div class="fw-bold text-theme-adaptive" id="modalFinalBpm" style="font-size: 1.25rem;">--</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card border-0 mb-2" style="background: rgba(1, 170, 197, 0.06); border-left: 4px solid #01aac5 !important;">
+                <!-- Structured Report Card -->
+                <div class="card border-0 mb-2" style="background: rgba(1, 170, 197, 0.06); border-left: 4px solid #01aac5 !important; border-radius: 0.75rem;">
                     <div class="card-body p-3">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i data-feather="cpu" style="width: 16px; height: 16px; color: #01aac5;"></i>
-                            <span class="fw-semibold small" style="color: #01aac5;">AI Recovery Coach (Gemini Few-Shot)</span>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <i data-feather="cpu" style="width: 16px; height: 16px; color: #01aac5;"></i>
+                                <span class="fw-semibold small" style="color: #01aac5;">AI Session Report</span>
+                            </div>
+                            <span class="badge bg-light text-muted border small" style="font-size: 0.72rem;">Saved to Medical Records</span>
                         </div>
-                        <p class="mb-0 text-theme-adaptive small" id="modalAiFeedback" style="line-height: 1.55;">
+
+                        <!-- Summary -->
+                        <p class="mb-3 text-theme-adaptive small" id="modalAiFeedback" style="line-height: 1.55;">
                             Analyzing session performance...
                         </p>
+
+                        <!-- What You Did Section -->
+                        <div class="mb-2">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <i data-feather="check-circle" style="width: 13px; height: 13px; color: #10b981;"></i>
+                                <span class="fw-semibold text-theme-adaptive" style="font-size: 0.8rem;">What You Did</span>
+                            </div>
+                            <ul class="list-unstyled mb-0 ps-2 small text-muted" id="modalWhatYouDid" style="line-height: 1.5;">
+                                <li class="d-flex align-items-start gap-2 mb-1">
+                                    <span class="text-success mt-1" style="font-size: 0.65rem;">●</span>
+                                    <span>Completing session analysis...</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Key Improvements Section -->
+                        <div class="mt-2 pt-2 border-top border-light-subtle">
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <i data-feather="trending-up" style="width: 13px; height: 13px; color: #01aac5;"></i>
+                                <span class="fw-semibold text-theme-adaptive" style="font-size: 0.8rem;">Key Improvements</span>
+                            </div>
+                            <ul class="list-unstyled mb-0 ps-2 small text-muted" id="modalKeyImprovements" style="line-height: 1.5;">
+                                <li class="d-flex align-items-start gap-2 mb-1">
+                                    <span class="text-info mt-1" style="font-size: 0.65rem;">●</span>
+                                    <span>Evaluating focus areas...</span>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer border-0 pt-0 justify-content-center">
-                <a href="/patient/dashboard" class="btn btn-primary px-4 py-2">
+                <a href="/patient/dashboard" class="btn btn-primary px-4 py-2" style="border-radius: 0.5rem;">
                     <i data-feather="arrow-left" class="me-1"></i> Return to Dashboard
                 </a>
             </div>

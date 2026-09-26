@@ -93,7 +93,7 @@
                         <select class="form-select" id="patient_id" name="patient_id" required>
                             <option value="">Choose a patient...</option>
                             {% for patient in patients %}
-                            <option value="{{ patient.id }}">
+                            <option value="{{ patient.id }}" {% if selected_patient_id and selected_patient_id == patient.id %}selected{% endif %}>
                                 {{ patient.user.first_name }} {{ patient.user.last_name }} 
                                 ({{ patient.condition.replace('_', ' ').title() }})
                             </option>
@@ -351,9 +351,12 @@ function selectAssessment(type) {
         card.classList.remove('selected');
     });
 
-    // Hide all assessment sections
+    // Hide all assessment sections and disable their inputs so only active input submits
     document.querySelectorAll('.assessment-section').forEach(section => {
         section.style.display = 'none';
+        section.querySelectorAll('input, select').forEach(inp => {
+            inp.disabled = true;
+        });
     });
 
     // Select new assessment
@@ -366,8 +369,14 @@ function selectAssessment(type) {
     document.getElementById('notesSection').style.display = 'block';
     document.getElementById('submitSection').style.display = 'block';
 
-    // Show specific assessment section
-    document.getElementById(`${type}Assessment`).style.display = 'block';
+    // Show specific assessment section and enable its inputs
+    const activeSection = document.getElementById(`${type}Assessment`);
+    if (activeSection) {
+        activeSection.style.display = 'block';
+        activeSection.querySelectorAll('input, select').forEach(inp => {
+            inp.disabled = false;
+        });
+    }
 
     // Update instructions
     const instructions = {
@@ -487,6 +496,11 @@ function resetForm() {
     measurementActive = false;
     tapCount = 0;
 
+    // Disable all inputs until a card is selected
+    document.querySelectorAll('.assessment-section input').forEach(inp => {
+        inp.disabled = true;
+    });
+
     feather.replace();
 }
 
@@ -543,6 +557,10 @@ function validateForm() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+    // Disable inputs in hidden assessment sections by default
+    document.querySelectorAll('.assessment-section input').forEach(inp => {
+        inp.disabled = true;
+    });
     feather.replace();
 });
 </script>

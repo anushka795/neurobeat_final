@@ -33,3 +33,6 @@ Thumbs.db
 
 # Redundant nested zip extractions
 Neura-Beats-main/
+
+# Temporary test scratch directory
+scratch/

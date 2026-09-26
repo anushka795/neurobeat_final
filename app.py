@@ -22,6 +22,36 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "neurobeat-secret-key-dev")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
+@app.template_filter('format_duration')
+def format_duration(seconds):
+    """Formats active duration in seconds into 'Xm Ys' or 'Xs' without dropping seconds"""
+    if seconds is None:
+        return "N/A"
+    try:
+        seconds = int(seconds)
+    except (ValueError, TypeError):
+        return "N/A"
+    if seconds < 0:
+        return "N/A"
+    m = seconds // 60
+    s = seconds % 60
+    if m > 0:
+        return f"{m}m {s:02d}s"
+    return f"{s}s"
+
+@app.template_filter('format_timer')
+def format_timer(seconds):
+    """Formats duration into standard timer string 'MM:SS'"""
+    if seconds is None:
+        return "00:00"
+    try:
+        seconds = max(0, int(seconds))
+    except (ValueError, TypeError):
+        return "00:00"
+    m = seconds // 60
+    s = seconds % 60
+    return f"{m:02d}:{s:02d}"
+
 # Configure the database
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///neurobeat.db")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {

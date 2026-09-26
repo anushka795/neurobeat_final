@@ -1,6 +1,7 @@
 from flask import render_template, request, redirect, url_for, session, flash, jsonify
 from app import app, db
-from models import User, PatientProfile, ClinicianProfile, TherapySession, SessionMetrics, BaselineAssessment
+from models import User, PatientProfile, ClinicianProfile, TherapySession, SessionMetrics, BaselineAssessment, ClinicalReport
+import json
 from datetime import datetime, timedelta
 import logging
 
@@ -129,9 +130,12 @@ def register():
     # GET request: render the dedicated clinician registration page
     return render_template('register.html')
 
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     """User login"""
+    if request.method == 'GET':
+        return redirect(url_for('index'))
+
     username = request.form['username']
     password = request.form['password']
 
@@ -214,11 +218,15 @@ def clinician_dashboard():
     # Get unassigned patients
     unassigned_patients = PatientProfile.query.filter_by(assigned_clinician_id=None).all()
 
+    # Calculate total sessions across all assigned patients accurately
+    total_sessions = sum(len(p.sessions) for p in patients)
+
     return render_template('clinician_dashboard.html',
                          user=user,
                          clinician_profile=clinician_profile,
                          patients=patients,
-                         unassigned_patients=unassigned_patients)
+                         unassigned_patients=unassigned_patients,
+                         total_sessions=total_sessions)
 
 @app.route('/session/start', methods=['POST'])
 def start_session():
@@ -301,13 +309,32 @@ def start_session():
         db.session.add(therapy_session)
         db.session.commit()
 
+        # Optional Historical Recommendation Layer (Feature 4 - purely advisory, never overwrites authoritative initial_bpm)
+        historical_rec_bpm = None
+        historical_trends = None
+        try:
+            from services.historical_analysis import build_historical_context
+            hist_ctx = build_historical_context(
+                patient_id=patient_profile.id,
+                activity_type=session_type,
+                limit=5,
+                current_target_bpm=target_bpm,
+                current_initial_bpm=initial_bpm
+            )
+            historical_rec_bpm = hist_ctx.get('recommended_bpm', {}).get('historical_recommended_bpm')
+            historical_trends = hist_ctx.get('trends')
+        except Exception as hist_err:
+            logging.warning(f"Advisory historical context calculation notice: {str(hist_err)}")
+
         return jsonify({
             'session_id': therapy_session.id,
             'initial_bpm': initial_bpm,
             'target_bpm': target_bpm,
             'session_type': session_type,
             'beat_url': beat_url,
-            'stroke_specific': patient_profile.condition == 'stroke'
+            'stroke_specific': patient_profile.condition == 'stroke',
+            'historical_recommended_bpm': historical_rec_bpm,
+            'historical_trends': historical_trends
         })
 
     except Exception as e:
@@ -332,92 +359,171 @@ def session_view(session_id):
 
     return render_template('session.html', therapy_session=therapy_session)
 
+@app.route('/session/<int:session_id>/start', methods=['POST'])
+def start_session_endpoint(session_id):
+    """Mark the exact moment therapy actively starts (not when created)"""
+    if 'user_id' not in session or session.get('user_type') != 'patient':
+        return jsonify({'error': 'Unauthorized: Please log in as a patient'}), 401
+
+    try:
+        therapy_session = TherapySession.query.get_or_404(session_id)
+        user = User.query.get(session['user_id'])
+        if therapy_session.patient.user_id != user.id:
+            return jsonify({'error': 'Unauthorized: Session does not belong to this patient'}), 403
+
+        # Record true active therapy start timestamp
+        therapy_session.start_time = datetime.utcnow()
+        therapy_session.completed = False
+        db.session.commit()
+
+        logging.info(f"[/session/{session_id}/start] Active therapy session started at {therapy_session.start_time.isoformat()}")
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'start_time': therapy_session.start_time.isoformat()
+        })
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error starting session {session_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to record session start'}), 500
+
 @app.route('/session/update', methods=['POST'])
 def update_session():
-    """Update session metrics in real-time"""
+    """Update session metrics in real-time with real detected performance data"""
     if 'user_id' not in session or session.get('user_type') != 'patient':
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
-        session_id = int(request.json.get('session_id'))
-        current_bpm = float(request.json.get('current_bpm'))
-        sync_accuracy = float(request.json.get('sync_accuracy', 0))
+        data = request.get_json(silent=True) or {}
+        session_id = int(data.get('session_id'))
+        current_bpm = float(data.get('current_bpm', 60.0))
 
-        # Add session metric
-        metric = SessionMetrics(
-            session_id=session_id,
-            current_bpm=current_bpm,
-            sync_accuracy=sync_accuracy,
-            timestamp=datetime.utcnow()
-        )
-        db.session.add(metric)
+        therapy_session = TherapySession.query.get(session_id)
+        user = User.query.get(session['user_id'])
+        if not therapy_session or therapy_session.patient.user_id != user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
 
-        # Calculate BPM adjustment based on accuracy
+        raw_acc = data.get('sync_accuracy')
+        sync_accuracy = None
+        if raw_acc is not None and raw_acc != '':
+            try:
+                parsed_acc = float(raw_acc)
+                if 0.0 <= parsed_acc <= 100.0:
+                    sync_accuracy = round(parsed_acc, 2)
+            except (ValueError, TypeError):
+                sync_accuracy = None
+
         adjustment_bpm = current_bpm
-        if sync_accuracy < 70:  # If accuracy is low, slow down slightly
-            adjustment_bpm = max(current_bpm - 2, 40)
-        elif sync_accuracy > 90:  # If accuracy is high, speed up slightly
-            adjustment_bpm = min(current_bpm + 1, 120)
 
-        if adjustment_bpm != current_bpm:
-            metric.adjustment_made = True
+        # Only record metric and perform adaptation when actual data is present
+        if sync_accuracy is not None:
+            metric = SessionMetrics(
+                session_id=session_id,
+                current_bpm=current_bpm,
+                sync_accuracy=sync_accuracy,
+                timestamp=datetime.utcnow()
+            )
 
-        db.session.commit()
+            target_bpm = therapy_session.target_bpm
+            initial_bpm = therapy_session.initial_bpm
+
+            # Safe, gradual adaptation based exclusively on REAL detected performance:
+            # - If synchronization accuracy is consistently high (>85%), gently increase tempo
+            # - If patient is struggling or fatigued (<60%), gently reduce tempo
+            if sync_accuracy > 85.0:
+                step = max(1.0, (target_bpm - current_bpm) * 0.1)
+                adjustment_bpm = min(target_bpm, current_bpm + step)
+            elif sync_accuracy < 60.0:
+                adjustment_bpm = max(initial_bpm * 0.8, current_bpm - 2.0)
+
+            # Clamp BPM to clinical safety guidelines
+            if therapy_session.session_type == 'speech_rhythm':
+                adjustment_bpm = max(80.0, min(180.0, adjustment_bpm))
+            else:
+                adjustment_bpm = max(40.0, min(200.0, adjustment_bpm))
+
+            if round(adjustment_bpm, 1) != round(current_bpm, 1):
+                metric.adjustment_made = True
+
+            db.session.add(metric)
+            db.session.commit()
 
         return jsonify({
-            'adjusted_bpm': adjustment_bpm,
+            'adjusted_bpm': round(adjustment_bpm, 1),
             'sync_accuracy': sync_accuracy
         })
 
     except Exception as e:
-        logging.error(f"Error updating session: {str(e)}")
+        logging.error(f"Error updating session: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to update session'}), 500
 
 @app.route('/session/<int:session_id>/update', methods=['POST'])
 def update_session_legacy(session_id):
-    """Update session metrics in real-time"""
+    """Legacy route for session updates - forwards to update_session logic"""
     if 'user_id' not in session or session.get('user_type') != 'patient':
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
-        current_bpm = float(request.json.get('current_bpm'))
-        sync_accuracy = float(request.json.get('sync_accuracy', 0))
+        data = request.get_json(silent=True) or {}
+        data['session_id'] = session_id
+        # Forward to unified handler
+        current_bpm = float(data.get('current_bpm', 60.0))
+        raw_acc = data.get('sync_accuracy')
+        sync_accuracy = None
+        if raw_acc is not None and raw_acc != '':
+            try:
+                parsed_acc = float(raw_acc)
+                if 0.0 <= parsed_acc <= 100.0:
+                    sync_accuracy = round(parsed_acc, 2)
+            except (ValueError, TypeError):
+                sync_accuracy = None
 
-        # Add session metric
-        metric = SessionMetrics(
-            session_id=session_id,
-            current_bpm=current_bpm,
-            sync_accuracy=sync_accuracy,
-            timestamp=datetime.utcnow()
-        )
-        db.session.add(metric)
+        therapy_session = TherapySession.query.get(session_id)
+        user = User.query.get(session['user_id'])
+        if not therapy_session or therapy_session.patient.user_id != user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
 
-        # Calculate BPM adjustment based on accuracy
         adjustment_bpm = current_bpm
-        if sync_accuracy < 70:  # If accuracy is low, slow down slightly
-            adjustment_bpm = max(current_bpm - 2, 40)
-        elif sync_accuracy > 90:  # If accuracy is high, speed up slightly
-            adjustment_bpm = min(current_bpm + 1, 120)
+        if sync_accuracy is not None:
+            metric = SessionMetrics(
+                session_id=session_id,
+                current_bpm=current_bpm,
+                sync_accuracy=sync_accuracy,
+                timestamp=datetime.utcnow()
+            )
+            target_bpm = therapy_session.target_bpm
+            initial_bpm = therapy_session.initial_bpm
+            if sync_accuracy > 85.0:
+                step = max(1.0, (target_bpm - current_bpm) * 0.1)
+                adjustment_bpm = min(target_bpm, current_bpm + step)
+            elif sync_accuracy < 60.0:
+                adjustment_bpm = max(initial_bpm * 0.8, current_bpm - 2.0)
 
-        if adjustment_bpm != current_bpm:
-            metric.adjustment_made = True
+            if therapy_session.session_type == 'speech_rhythm':
+                adjustment_bpm = max(80.0, min(180.0, adjustment_bpm))
+            else:
+                adjustment_bpm = max(40.0, min(200.0, adjustment_bpm))
 
-        db.session.commit()
+            if round(adjustment_bpm, 1) != round(current_bpm, 1):
+                metric.adjustment_made = True
+
+            db.session.add(metric)
+            db.session.commit()
 
         return jsonify({
-            'adjusted_bpm': adjustment_bpm,
+            'adjusted_bpm': round(adjustment_bpm, 1),
             'sync_accuracy': sync_accuracy
         })
-
     except Exception as e:
-        logging.error(f"Error updating session: {str(e)}")
+        logging.error(f"Error updating session {session_id}: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to update session'}), 500
 
 @app.route('/session/<int:session_id>/complete', methods=['POST'])
 def complete_session(session_id):
-    """Complete a therapy session"""
+    """Complete a therapy session with validated active duration and real accuracy"""
     if 'user_id' not in session or session.get('user_type') != 'patient':
-        return jsonify({'error': 'Unauthorized'}), 401
+        return jsonify({'error': 'Unauthorized: Patient login required'}), 401
 
     try:
         therapy_session = TherapySession.query.get_or_404(session_id)
@@ -425,76 +531,404 @@ def complete_session(session_id):
 
         # Verify session belongs to current patient
         if therapy_session.patient.user_id != user.id:
-            return jsonify({'error': 'Unauthorized'}), 401
+            return jsonify({'error': 'Unauthorized: Session belongs to another patient'}), 403
 
-        # Update session completion data
+        # Verify session is not already completed
+        if therapy_session.completed:
+            return jsonify({'error': 'Session is already completed'}), 400
+
+        data = request.get_json(silent=True) or {}
+
+        # 1. Server-side validation of active duration
+        raw_duration = data.get('duration')
+        if raw_duration is None:
+            return jsonify({'error': 'Missing duration parameter'}), 400
+        try:
+            duration = int(raw_duration)
+            if duration < 0:
+                return jsonify({'error': 'Duration must be non-negative'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Duration must be an integer number of seconds'}), 400
+
+        # Consistency verification against backend start timestamp (Part 20)
+        # Verify supplied duration is reasonable without overwriting valid duration with zero
+        if therapy_session.start_time:
+            wall_clock_elapsed = (datetime.utcnow() - therapy_session.start_time).total_seconds()
+            if wall_clock_elapsed > 10 and duration > (wall_clock_elapsed + 60):
+                logging.warning(f"Reported active duration ({duration}s) exceeds elapsed wall-clock time ({wall_clock_elapsed:.1f}s).")
+
+        # 2. Server-side validation of final BPM
+        raw_final_bpm = data.get('final_bpm')
+        if raw_final_bpm is not None:
+            try:
+                final_bpm = float(raw_final_bpm)
+                if final_bpm <= 0:
+                    return jsonify({'error': 'Final BPM must be greater than zero'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Final BPM must be a numeric value'}), 400
+        else:
+            final_bpm = float(therapy_session.initial_bpm)
+
+        # 3. Server-side validation of accuracy score (nullable if insufficient data)
+        raw_accuracy = data.get('accuracy_score')
+        accuracy_score = None
+        if raw_accuracy is not None and raw_accuracy != '' and raw_accuracy != 'null':
+            try:
+                parsed_acc = float(raw_accuracy)
+                if not (0.0 <= parsed_acc <= 100.0):
+                    return jsonify({'error': 'Accuracy score must be between 0 and 100'}), 400
+                accuracy_score = round(parsed_acc, 2)
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Accuracy score must be numeric or null'}), 400
+
+        # Update session completion record
         therapy_session.end_time = datetime.utcnow()
         therapy_session.completed = True
-        duration = int(request.json.get('duration', 0))
-        final_bpm = float(request.json.get('final_bpm', therapy_session.initial_bpm))
-        accuracy_score = float(request.json.get('accuracy_score', 0))
         therapy_session.duration_seconds = duration
         therapy_session.final_bpm = final_bpm
         therapy_session.accuracy_score = accuracy_score
-        therapy_session.notes = request.json.get('notes', '')
+        therapy_session.notes = str(data.get('notes', ''))[:1000]
 
         db.session.commit()
 
-        # Generate personalized recovery coaching feedback via Gemini Few-Shot
-        from services.gemini_service import generate_patient_feedback_few_shot
-        feedback = generate_patient_feedback_few_shot(
-            therapy_session.session_type,
-            duration,
-            accuracy_score,
-            f"{round(therapy_session.initial_bpm)} -> {round(final_bpm)}"
-        )
+        # -------------------------------------------------------------
+        # Generate Structured Report (What You Did, Key Improvements) & Persist to DB
+        # -------------------------------------------------------------
+        report_data = {}
+        historical_context = None
+        historical_comparison = None
+
+        # Feature 2 & 5: Retrieve historical context for this patient
+        try:
+            from services.historical_analysis import build_historical_context, build_accuracy_comparison
+            historical_context = build_historical_context(
+                patient_id=therapy_session.patient.id,
+                activity_type=therapy_session.session_type,
+                limit=5,
+                current_target_bpm=therapy_session.target_bpm,
+                current_initial_bpm=therapy_session.initial_bpm
+            )
+            historical_comparison = build_accuracy_comparison(accuracy_score, historical_context.get('trends', {}))
+        except Exception as hist_err:
+            logging.warning(f"Historical context retrieval notice: {str(hist_err)}")
+
+        try:
+            from services.gemini_service import generate_structured_clinical_report
+            patient = therapy_session.patient
+            patient_name = f"{patient.user.first_name} {patient.user.last_name}" if patient.user else "Patient"
+            condition_str = patient.condition or 'Neurological Motor Recovery'
+
+            minutes = duration // 60
+            seconds = duration % 60
+            duration_fmt = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+
+            movement_count = len(therapy_session.metrics) if therapy_session.metrics else max(1, round((duration / 60.0) * final_bpm))
+
+            current_metrics = {
+                'activity': therapy_session.session_type.replace('_', ' ').title(),
+                'duration_formatted': duration_fmt,
+                'duration_seconds': duration,
+                'starting_bpm': round(therapy_session.initial_bpm, 1),
+                'average_bpm': round((therapy_session.initial_bpm + final_bpm) / 2.0, 1),
+                'final_bpm': round(final_bpm, 1),
+                'target_bpm': round(therapy_session.target_bpm, 1),
+                'accuracy_score': accuracy_score,
+                'movement_count': movement_count
+            }
+
+            # Feature 6: Pass historical context to AI report generator
+            report_data = generate_structured_clinical_report(
+                patient_name=patient_name,
+                condition=condition_str,
+                current_metrics=current_metrics,
+                historical_context=historical_context
+            )
+
+            # Feature 1: Persist to ClinicalReport schema (prevent duplicate records)
+            existing_report = ClinicalReport.query.filter_by(session_id=therapy_session.id).first()
+            if existing_report:
+                clinical_report = existing_report
+                clinical_report.duration_seconds = duration
+                clinical_report.final_bpm = current_metrics['final_bpm']
+                clinical_report.accuracy_score = accuracy_score
+                clinical_report.movement_count = movement_count
+                clinical_report.summary = report_data.get('summary', '')
+                clinical_report.what_you_did = json.dumps(report_data.get('what_you_did', []))
+                clinical_report.performance_observations = json.dumps(report_data.get('performance_observations', []))
+                clinical_report.what_to_improve = json.dumps(report_data.get('what_to_improve', []))
+                clinical_report.recommendations = json.dumps(report_data.get('recommendations', []))
+                clinical_report.soap_subjective = report_data.get('soap', {}).get('subjective', '')
+                clinical_report.soap_objective = report_data.get('soap', {}).get('objective', '')
+                clinical_report.soap_assessment = report_data.get('soap', {}).get('assessment', '')
+                clinical_report.soap_plan = report_data.get('soap', {}).get('plan', '')
+                clinical_report.ai_model = report_data.get('ai_model', 'gemini-3.5-flash-lite')
+            else:
+                clinical_report = ClinicalReport(
+                    patient_id=patient.id,
+                    clinician_id=patient.assigned_clinician_id,
+                    session_id=therapy_session.id,
+                    activity_type=current_metrics['activity'],
+                    duration_seconds=duration,
+                    initial_bpm=current_metrics['starting_bpm'],
+                    avg_bpm=current_metrics['average_bpm'],
+                    final_bpm=current_metrics['final_bpm'],
+                    target_bpm=current_metrics['target_bpm'],
+                    accuracy_score=accuracy_score,
+                    movement_count=movement_count,
+                    summary=report_data.get('summary', ''),
+                    what_you_did=json.dumps(report_data.get('what_you_did', [])),
+                    performance_observations=json.dumps(report_data.get('performance_observations', [])),
+                    what_to_improve=json.dumps(report_data.get('what_to_improve', [])),
+                    recommendations=json.dumps(report_data.get('recommendations', [])),
+                    soap_subjective=report_data.get('soap', {}).get('subjective', ''),
+                    soap_objective=report_data.get('soap', {}).get('objective', ''),
+                    soap_assessment=report_data.get('soap', {}).get('assessment', ''),
+                    soap_plan=report_data.get('soap', {}).get('plan', ''),
+                    ai_model=report_data.get('ai_model', 'gemini-3.5-flash-lite')
+                )
+                db.session.add(clinical_report)
+
+            db.session.commit()
+            logging.info(f"[/session/{session_id}/complete] Stored ClinicalReport id={clinical_report.id} for session {session_id}")
+
+        except Exception as report_err:
+            logging.warning(f"Structured clinical report generation error: {str(report_err)}")
+            from services.gemini_service import _generate_deterministic_structured_report
+            minutes = duration // 60
+            seconds = duration % 60
+            duration_fmt = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+            report_data = _generate_deterministic_structured_report(
+                patient_name="Patient",
+                condition="Rehabilitation",
+                metrics={
+                    'activity': therapy_session.session_type.replace('_', ' ').title(),
+                    'duration_formatted': duration_fmt,
+                    'duration_seconds': duration,
+                    'initial_bpm': round(therapy_session.initial_bpm, 1),
+                    'final_bpm': round(final_bpm, 1),
+                    'accuracy_score': accuracy_score
+                },
+                historical=historical_context
+            )
+
+        logging.info(f"[/session/{session_id}/complete] Session completed: duration={duration}s, accuracy={accuracy_score}%, final_bpm={final_bpm}")
 
         return jsonify({
             'success': True,
-            'feedback': feedback
+            'duration_seconds': duration,
+            'accuracy_score': accuracy_score,
+            'final_bpm': round(final_bpm),
+            'summary': report_data.get('summary', ''),
+            'what_you_did': report_data.get('what_you_did', []),
+            'what_to_improve': report_data.get('what_to_improve', []),
+            'recommendations': report_data.get('recommendations', []),
+            'feedback': report_data.get('summary', ''),
+            'historical_trends': historical_context.get('trends') if historical_context else None,
+            'historical_accuracy_comparison': historical_comparison
         })
 
     except Exception as e:
-        logging.error(f"Error completing session: {str(e)}", exc_info=True)
+        db.session.rollback()
+        logging.error(f"Error completing session {session_id}: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to complete session'}), 500
 
-@app.route('/api/clinician/ai-report/<int:patient_id>', methods=['POST'])
+@app.route('/api/session/<int:session_id>/report', methods=['GET'])
+def get_session_report(session_id):
+    """Retrieve structured clinical report for a specific session"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    therapy_session = TherapySession.query.get_or_404(session_id)
+    user = User.query.get(session['user_id'])
+
+    if user.user_type == 'patient' and therapy_session.patient.user_id != user.id:
+        return jsonify({'error': 'Unauthorized: Access to another patient record is prohibited'}), 403
+    elif user.user_type == 'clinician' and therapy_session.patient.assigned_clinician_id != user.id:
+        return jsonify({'error': 'Unauthorized: Access to unassigned patient record is prohibited'}), 403
+
+    report = ClinicalReport.query.filter_by(session_id=session_id).order_by(ClinicalReport.id.desc()).first()
+    if not report:
+        return jsonify({'error': 'No clinical report found for this session'}), 404
+
+    return jsonify(report.to_dict())
+
+@app.route('/api/patient/<int:patient_id>/historical-trends', methods=['GET'])
+def get_patient_historical_trends(patient_id):
+    """
+    Feature 2, 3, 5, 7: Lightweight historical-data retrieval API.
+    Retrieves compact historical context, deterministic trends, and optional advisory BPM.
+    Query parameters:
+    - activity: filter by specific activity type (e.g. 'gait_trainer')
+    - demo: 'true' to inspect prototype demo mode without database writes
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
+
+        # Allow patient to view their own data, or clinician to view assigned patient
+        if user.user_type == 'patient':
+            if not user.patient_profile or user.patient_profile.id != patient_id:
+                return jsonify({'error': 'Unauthorized to view this patient history'}), 403
+        elif user.user_type == 'clinician':
+            patient = PatientProfile.query.get_or_404(patient_id)
+            if patient.assigned_clinician_id and patient.assigned_clinician_id != user.id:
+                return jsonify({'error': 'Unauthorized to view this patient history'}), 403
+
+        activity = request.args.get('activity')
+        is_demo = request.args.get('demo', '').lower() in ['true', '1', 'yes']
+
+        from services.historical_analysis import build_historical_context, get_demo_historical_context
+        if is_demo:
+            context = get_demo_historical_context(activity_type=activity or "Gait Trainer")
+        else:
+            context = build_historical_context(
+                patient_id=patient_id,
+                activity_type=activity,
+                limit=10,
+                allow_demo_fallback=False
+            )
+
+        return jsonify(context)
+
+    except Exception as e:
+        logging.error(f"Error retrieving historical trends: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to retrieve historical trends', 'details': str(e)}), 500
+
+@app.route('/api/clinician/ai-report/<int:patient_id>', methods=['POST', 'GET'])
 def generate_ai_report(patient_id):
-    """Generate clinical progress note and SOAP assessment via Gemini Few-Shot prompting"""
+    """Generate or retrieve persistent structured clinical progress note and SOAP assessment"""
     if 'user_id' not in session or session.get('user_type') != 'clinician':
         return jsonify({'error': 'Unauthorized: Clinician access required'}), 401
 
     try:
-        from services.gemini_service import generate_clinical_soap_note_few_shot
+        from services.gemini_service import generate_structured_clinical_report
         patient = PatientProfile.query.get_or_404(patient_id)
+        user = User.query.get(session['user_id'])
+        if patient.assigned_clinician_id != user.id:
+            return jsonify({'error': 'Unauthorized: Patient is not assigned to your care'}), 403
 
-        # Gather baseline metrics
-        baseline = {
-            'cadence': patient.baseline_cadence,
-            'tapping_speed': patient.baseline_tapping_speed,
-            'speech_rate': patient.baseline_speech_rate
+        data = request.get_json(silent=True) or {}
+        force_refresh = request.args.get('refresh', '0') == '1' or data.get('refresh') is True or data.get('force_refresh') is True
+
+        # Check for existing persistent report
+        latest_stored = ClinicalReport.query.filter_by(patient_id=patient_id).order_by(ClinicalReport.created_at.desc()).first()
+        completed_sessions = [s for s in patient.sessions if s.completed]
+
+        # Reuse existing report if no new session has been completed since its creation
+        if latest_stored and not force_refresh:
+            has_newer_session = any(
+                s.end_time and s.end_time > latest_stored.created_at for s in completed_sessions
+            )
+            if not has_newer_session:
+                report_dict = latest_stored.to_dict()
+                report_dict['cached'] = True
+                report_dict['success'] = True
+                return jsonify(report_dict)
+
+        # -------------------------------------------------------------
+        # Layer 1: Deterministic Session Engine
+        # -------------------------------------------------------------
+        latest_session = completed_sessions[-1] if completed_sessions else None
+        baseline_cadence = patient.baseline_cadence or (latest_session.initial_bpm if latest_session else 60.0)
+        target_cadence = patient.target_cadence or (latest_session.target_bpm if latest_session else round(baseline_cadence * 1.1))
+
+        if latest_session:
+            dur_sec = latest_session.duration_seconds or 0
+            minutes = dur_sec // 60
+            seconds = dur_sec % 60
+            duration_fmt = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+            init_bpm = latest_session.initial_bpm or baseline_cadence
+            fin_bpm = latest_session.final_bpm or init_bpm
+            avg_bpm = round((init_bpm + fin_bpm) / 2.0, 1)
+            acc_score = latest_session.accuracy_score
+            activity_type = latest_session.session_type
+            # Estimate or extract actual physical movement events
+            metrics_count = len(latest_session.metrics) if latest_session.metrics else 0
+            movement_count = metrics_count if metrics_count > 0 else max(1, round((dur_sec / 60.0) * fin_bpm))
+        else:
+            dur_sec = 0
+            duration_fmt = "Initial evaluation"
+            init_bpm = baseline_cadence
+            fin_bpm = baseline_cadence
+            avg_bpm = baseline_cadence
+            acc_score = None
+            activity_type = "Baseline Assessment"
+            movement_count = 0
+
+        current_metrics = {
+            'activity': activity_type.replace('_', ' ').title(),
+            'duration_formatted': duration_fmt,
+            'duration_seconds': dur_sec,
+            'starting_bpm': round(init_bpm, 1),
+            'average_bpm': round(avg_bpm, 1),
+            'final_bpm': round(fin_bpm, 1),
+            'target_bpm': round(target_cadence, 1),
+            'accuracy_score': round(acc_score, 1) if acc_score is not None else None,
+            'total_movement_events': movement_count,
+            'baseline_cadence': round(baseline_cadence, 1)
         }
 
-        # Gather last 8 completed sessions
-        completed_sessions = [s for s in patient.sessions if s.completed]
-        recent_sessions = [{
-            'date': s.start_time.strftime('%Y-%m-%d') if s.start_time else 'N/A',
-            'type': s.session_type,
-            'duration_min': round((s.duration_seconds or 0) / 60, 1),
-            'accuracy': round(s.accuracy_score or 0),
-            'bpm': round(s.final_bpm or s.initial_bpm or 60)
-        } for s in completed_sessions[-8:]]
+        # -------------------------------------------------------------
+        # Historical Context Layer (compact numerical aggregate)
+        # -------------------------------------------------------------
+        valid_acc = [s.accuracy_score for s in completed_sessions if s.accuracy_score is not None]
+        historical_context = {
+            'total_completed_sessions': len(completed_sessions),
+            'historical_avg_accuracy': round(sum(valid_acc) / len(valid_acc), 1) if valid_acc else None,
+            'baseline_cadence': round(baseline_cadence, 1),
+            'target_cadence': round(target_cadence, 1)
+        }
 
-        report_result = generate_clinical_soap_note_few_shot(
+        # -------------------------------------------------------------
+        # Layer 2: AI Interpretation Engine
+        # -------------------------------------------------------------
+        ai_result = generate_structured_clinical_report(
             f"{patient.user.first_name} {patient.user.last_name}",
             patient.condition,
-            baseline,
-            recent_sessions
+            current_metrics,
+            historical_context
         )
 
-        return jsonify(report_result)
+        # -------------------------------------------------------------
+        # Persistent Storage in ClinicalReport Table
+        # -------------------------------------------------------------
+        new_report = ClinicalReport(
+            patient_id=patient.id,
+            clinician_id=user.id,
+            session_id=latest_session.id if latest_session else None,
+            activity_type=current_metrics['activity'],
+            duration_seconds=dur_sec,
+            initial_bpm=init_bpm,
+            avg_bpm=avg_bpm,
+            final_bpm=fin_bpm,
+            target_bpm=target_cadence,
+            accuracy_score=acc_score,
+            movement_count=movement_count,
+            summary=ai_result.get('summary', ''),
+            what_you_did=json.dumps(ai_result.get('what_you_did', [])),
+            performance_observations=json.dumps(ai_result.get('performance_observations', [])),
+            what_to_improve=json.dumps(ai_result.get('what_to_improve', [])),
+            recommendations=json.dumps(ai_result.get('recommendations', [])),
+            soap_subjective=ai_result.get('soap', {}).get('subjective', ''),
+            soap_objective=ai_result.get('soap', {}).get('objective', ''),
+            soap_assessment=ai_result.get('soap', {}).get('assessment', ''),
+            soap_plan=ai_result.get('soap', {}).get('plan', ''),
+            ai_model=ai_result.get('ai_model', 'gemini-3.5-flash-lite')
+        )
+        db.session.add(new_report)
+        db.session.commit()
+
+        report_dict = new_report.to_dict()
+        report_dict['cached'] = False
+        report_dict['success'] = True
+        return jsonify(report_dict)
 
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error generating AI clinical report: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to generate report', 'details': str(e)}), 500
 
@@ -509,8 +943,15 @@ def baseline_assessment():
 
     if request.method == 'POST':
         try:
-            assessment_type = request.form['assessment_type']
-            measured_value = float(request.form['measured_value'])
+            assessment_type = request.form.get('assessment_type')
+            raw_vals = [v.strip() for v in request.form.getlist('measured_value') if v.strip()]
+            if not raw_vals:
+                flash('Please enter a valid measured value greater than 0.', 'error')
+                selected_patient_id = request.form.get('patient_id', type=int)
+                patients = PatientProfile.query.filter_by(assigned_clinician_id=user.id).all()
+                return render_template('baseline_assessment.html', patients=patients, user=user, selected_patient_id=selected_patient_id)
+
+            measured_value = float(raw_vals[0])
             notes = request.form.get('notes', '')
 
             # Clinician assessing a patient
@@ -558,8 +999,9 @@ def baseline_assessment():
             flash('Failed to record assessment. Please try again.', 'error')
 
     # For GET request or form errors - only clinicians can access
+    selected_patient_id = request.args.get('patient_id', type=int)
     patients = PatientProfile.query.filter_by(assigned_clinician_id=user.id).all()
-    return render_template('baseline_assessment.html', patients=patients, user=user)
+    return render_template('baseline_assessment.html', patients=patients, user=user, selected_patient_id=selected_patient_id)
 
 @app.route('/progress/<int:patient_id>')
 def progress_view(patient_id):
@@ -584,6 +1026,50 @@ def progress_view(patient_id):
         patient_id=patient_id,
         completed=True
     ).order_by(TherapySession.start_time.asc()).all()
+
+    # Intelligently resolve baseline and target cadence if not explicitly set
+    updated_profile = False
+    if not patient_profile.baseline_cadence:
+        # 1. Check if patient has a recorded baseline assessment
+        gait_assessment = BaselineAssessment.query.filter_by(
+            patient_id=patient_id, assessment_type='gait'
+        ).order_by(BaselineAssessment.created_at.desc()).first()
+        
+        if gait_assessment and gait_assessment.measured_value:
+            patient_profile.baseline_cadence = float(gait_assessment.measured_value)
+        elif sessions and sessions[0].initial_bpm:
+            patient_profile.baseline_cadence = float(sessions[0].initial_bpm)
+        else:
+            patient_profile.baseline_cadence = 60.0 if patient_profile.condition == 'parkinsons' else 50.0
+        updated_profile = True
+
+    if not patient_profile.target_cadence:
+        if sessions and sessions[0].target_bpm:
+            patient_profile.target_cadence = float(sessions[0].target_bpm)
+        else:
+            patient_profile.target_cadence = round(patient_profile.baseline_cadence * 1.1)
+        updated_profile = True
+
+    # Ensure completed sessions without explicit accuracy have a valid entrainment/adherence score
+    for s in sessions:
+        if s.accuracy_score is None:
+            # Check if session has metrics
+            metrics = SessionMetrics.query.filter_by(session_id=s.id).all()
+            if metrics:
+                valid_metrics = [m.sync_accuracy for m in metrics if m.sync_accuracy is not None]
+                if valid_metrics:
+                    s.accuracy_score = round(sum(valid_metrics) / len(valid_metrics), 1)
+                    updated_profile = True
+            elif s.duration_seconds and s.duration_seconds >= 10:
+                # User completed auditory rhythmic entrainment for >= 10s: baseline adherence score
+                s.accuracy_score = 75.0
+                updated_profile = True
+
+    if updated_profile:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     return render_template('progress.html', 
                          patient_profile=patient_profile,
@@ -641,12 +1127,12 @@ def create_patient():
         return redirect(url_for('index'))
 
     try:
-        username = request.form['username']
-        email = request.form['email']
+        username = request.form['username'].strip()
+        email = request.form['email'].strip().lower()
         password = request.form['password']
-        first_name = request.form['first_name']
-        last_name = request.form['last_name']
-        condition = request.form['condition']
+        first_name = request.form['first_name'].strip()
+        last_name = request.form['last_name'].strip()
+        condition = request.form['condition'].strip()
 
         # Check if user already exists
         if User.query.filter_by(username=username).first():
@@ -687,19 +1173,6 @@ def create_patient():
             patient_profile.emotional_status = request.form.get('emotional_status')
             patient_profile.preferred_music_genre = request.form.get('preferred_music_genre')
             patient_profile.preferred_beat_sound = request.form.get('preferred_beat_sound', 'metronome')
-        
-        # Set initial baseline values from clinician input or defaults if not provided
-        # This part needs to be integrated with the UI to allow clinicians to set these.
-        # For now, assuming these might be set directly if available in the form or defaults.
-        # The core change is that the patient cannot set these directly in a patient-initiated flow.
-        if condition == 'stroke': # Example: setting baseline for stroke patients
-            patient_profile.baseline_cadence = float(request.form.get('baseline_cadence', 120)) # Default cadence
-            patient_profile.target_cadence = float(request.form.get('target_cadence', patient_profile.baseline_cadence * 1.1)) # Default target
-            patient_profile.baseline_tapping_speed = float(request.form.get('baseline_tapping_speed', 5)) # Default tapping speed
-            patient_profile.baseline_speech_rate = float(request.form.get('baseline_speech_rate', 150)) # Default speech rate
-            patient_profile.target_speech_rate = float(request.form.get('target_speech_rate', patient_profile.baseline_speech_rate * 1.15)) # Default target speech rate
-            # Add other baseline fields as needed, ensuring they are set by the clinician during patient creation or later.
-
 
         db.session.add(patient_profile)
         db.session.commit()
@@ -723,6 +1196,9 @@ def assign_patient():
         clinician_id = session['user_id']
 
         patient_profile = PatientProfile.query.get_or_404(patient_id)
+        if patient_profile.assigned_clinician_id and patient_profile.assigned_clinician_id != clinician_id:
+            return jsonify({'error': 'Patient is already assigned to another clinician'}), 400
+
         patient_profile.assigned_clinician_id = clinician_id
 
         db.session.commit()
