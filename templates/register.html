@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Clinician Registration - NeuroBeat{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white py-3">
+                <div class="d-flex align-items-center">
+                    <i data-feather="user-plus" class="me-2" style="width: 24px; height: 24px;"></i>
+                    <h4 class="mb-0 fw-bold">Register as Clinician</h4>
+                </div>
+                <p class="mb-0 text-white-50 small mt-1">Create a healthcare provider account to monitor and manage rehabilitation patients</p>
+            </div>
+            <div class="card-body p-4">
+                <!-- Inline Error/Success Alert -->
+                <div id="pageRegisterAlert" class="alert alert-danger py-2 px-3 small mb-3" style="display: none;"></div>
+
+                <form id="dedicatedRegisterForm" method="POST" action="{{ url_for('register') }}" novalidate>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="page_first_name" class="form-label fw-semibold">First Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="page_first_name" name="first_name" placeholder="First name" required>
+                            <div class="invalid-feedback">First name is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="page_last_name" class="form-label fw-semibold">Last Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="page_last_name" name="last_name" placeholder="Last name" required>
+                            <div class="invalid-feedback">Last name is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="page_username" class="form-label fw-semibold">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="page_username" name="username" placeholder="Choose a unique username" required autocomplete="username">
+                            <div class="invalid-feedback" id="page_username_feedback">Username is required.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="page_email" class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="page_email" name="email" placeholder="clinician@hospital.org" required autocomplete="email">
+                            <div class="invalid-feedback" id="page_email_feedback">Valid email address is required.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label for="page_password" class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="page_password" name="password" placeholder="Create a secure password" required autocomplete="new-password">
+                            <div class="invalid-feedback">Password is required.</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="text-primary mb-3">
+                        <i data-feather="award" class="me-2" style="width: 18px; height: 18px;"></i>
+                        Professional Credentials
+                    </h5>
+
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label for="page_profession" class="form-label fw-semibold">Profession <span class="text-danger">*</span></label>
+                            <select class="form-select no-custom-dropdown" id="page_profession" name="profession" required>
+                                <option value="" disabled selected>-- Select Profession --</option>
+                                <option value="Physician">Physician</option>
+                                <option value="Neurologist">Neurologist</option>
+                                <option value="Physiotherapist">Physiotherapist</option>
+                                <option value="Occupational Therapist">Occupational Therapist</option>
+                                <option value="Speech-Language Pathologist">Speech-Language Pathologist</option>
+                                <option value="Music Therapist">Music Therapist</option>
+                                <option value="Clinical Psychologist">Clinical Psychologist</option>
+                                <option value="Rehabilitation Specialist">Rehabilitation Specialist</option>
+                                <option value="Nurse">Nurse</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <div class="invalid-feedback" id="page_profession_feedback">Please select your healthcare profession.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="page_license_number" class="form-label fw-semibold">License Number</label>
+                            <input type="text" class="form-control" id="page_license_number" name="license_number" placeholder="e.g., MED-12345">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="page_specialization" class="form-label fw-semibold">Specialization</label>
+                            <input type="text" class="form-control" id="page_specialization" name="specialization" placeholder="e.g., Neurological Rehabilitation">
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="user_type" value="clinician">
+
+                    <div class="mt-4 pt-2 d-flex justify-content-between align-items-center">
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                            <i data-feather="arrow-left" class="me-1"></i>
+                            Back to Sign In
+                        </a>
+                        <button type="submit" class="btn btn-primary px-4 py-2" id="btnPageSubmitRegister">
+                            <i data-feather="user-plus" class="me-2"></i>
+                            Create Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer bg-light text-center py-3 text-muted small">
+                Already registered? <a href="{{ url_for('index') }}" class="fw-semibold text-primary">Sign in to your account</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+
+    const regForm = document.getElementById('dedicatedRegisterForm');
+    const alertBox = document.getElementById('pageRegisterAlert');
+    const submitBtn = document.getElementById('btnPageSubmitRegister');
+
+    if (regForm) {
+        regForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Clear previous errors
+            if (alertBox) {
+                alertBox.style.display = 'none';
+                alertBox.textContent = '';
+            }
+            regForm.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+
+            // Client-side quick checks
+            let hasError = false;
+            const firstName = document.getElementById('page_first_name');
+            const lastName = document.getElementById('page_last_name');
+            const username = document.getElementById('page_username');
+            const email = document.getElementById('page_email');
+            const password = document.getElementById('page_password');
+            const profession = document.getElementById('page_profession');
+
+            if (!firstName.value.trim()) { firstName.classList.add('is-invalid'); hasError = true; }
+            if (!lastName.value.trim()) { lastName.classList.add('is-invalid'); hasError = true; }
+            if (!username.value.trim()) { username.classList.add('is-invalid'); hasError = true; }
+            if (!email.value.trim() || !email.value.includes('@')) { email.classList.add('is-invalid'); hasError = true; }
+            if (!password.value) { password.classList.add('is-invalid'); hasError = true; }
+            if (!profession.value) { profession.classList.add('is-invalid'); hasError = true; }
+
+            if (hasError) {
+                if (alertBox) {
+                    alertBox.textContent = 'Please fill out all required fields marked with *';
+                    alertBox.style.display = 'block';
+                    alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+
+            const formData = new FormData(regForm);
+            const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating Account...';
+            }
+
+            try {
+                const response = await fetch(regForm.action || '/register', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    window.location.href = data.redirect || '/clinician/dashboard';
+                } else {
+                    if (alertBox) {
+                        alertBox.textContent = data.error || 'Registration failed. Please check your information.';
+                        alertBox.style.display = 'block';
+                        alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    if (data.field === 'username' && username) {
+                        username.classList.add('is-invalid');
+                        const fb = document.getElementById('page_username_feedback');
+                        if (fb) fb.textContent = data.error;
+                        username.focus();
+                    } else if (data.field === 'email' && email) {
+                        email.classList.add('is-invalid');
+                        const fb = document.getElementById('page_email_feedback');
+                        if (fb) fb.textContent = data.error;
+                        email.focus();
+                    } else if (data.field === 'profession' && profession) {
+                        profession.classList.add('is-invalid');
+                        profession.focus();
+                    }
+
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                        if (typeof feather !== 'undefined') feather.replace();
+                    }
+                }
+            } catch (err) {
+                console.error('Registration fetch error:', err);
+                regForm.submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

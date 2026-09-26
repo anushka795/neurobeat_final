@@ -13,8 +13,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function convertToVisibleDropdown(selectElement) {
-    // Skip if already converted
-    if (selectElement.style.display === 'none' || selectElement.dataset.converted === 'true') return;
+    // Skip if inside a modal, opted out, or already converted
+    if (selectElement.closest('.modal') || selectElement.classList.contains('no-custom-dropdown') || selectElement.style.display === 'none' || selectElement.dataset.converted === 'true') {
+        return;
+    }
     selectElement.dataset.converted = 'true';
 
     // Create container for the custom dropdown

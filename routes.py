@@ -26,35 +26,47 @@ def register():
             request.is_json
         )
         try:
-            username = request.form.get('username') or (request.json.get('username') if request.is_json else None)
-            email = request.form.get('email') or (request.json.get('email') if request.is_json else None)
-            password = request.form.get('password') or (request.json.get('password') if request.is_json else None)
-            user_type = request.form.get('user_type', 'clinician')
-            first_name = request.form.get('first_name') or (request.json.get('first_name') if request.is_json else None)
-            last_name = request.form.get('last_name') or (request.json.get('last_name') if request.is_json else None)
+            username = (request.form.get('username') or (request.json.get('username') if request.is_json else '') or '').strip()
+            email = (request.form.get('email') or (request.json.get('email') if request.is_json else '') or '').strip().lower()
+            password = request.form.get('password') or (request.json.get('password') if request.is_json else '')
+            user_type = (request.form.get('user_type') or (request.json.get('user_type') if request.is_json else 'clinician') or 'clinician').strip()
+            first_name = (request.form.get('first_name') or (request.json.get('first_name') if request.is_json else '') or '').strip()
+            last_name = (request.form.get('last_name') or (request.json.get('last_name') if request.is_json else '') or '').strip()
+            profession = (request.form.get('profession') or (request.json.get('profession') if request.is_json else '') or '').strip()
 
+            logging.info(f"[/register] Attempt for username='{username}', email='{email}', profession='{profession}'")
+
+            # Validate required fields
             if not username or not email or not password or not first_name or not last_name:
-                err_msg = 'Please fill out all required fields.'
+                missing = []
+                if not first_name: missing.append('First Name')
+                if not last_name: missing.append('Last Name')
+                if not username: missing.append('Username')
+                if not email: missing.append('Email')
+                if not password: missing.append('Password')
+                err_msg = f"Please fill out all required fields: {', '.join(missing)}."
                 if is_ajax:
                     return jsonify({'success': False, 'error': err_msg}), 400
                 flash(err_msg, 'error')
-                return redirect(url_for('index'))
+                return render_template('register.html')
 
             # Check if username already exists
-            if User.query.filter_by(username=username).first():
+            existing_user = User.query.filter(User.username.ilike(username)).first()
+            if existing_user:
                 err_msg = f'Username "{username}" is already taken. Please choose another username.'
                 if is_ajax:
-                    return jsonify({'success': False, 'error': err_msg}), 400
+                    return jsonify({'success': False, 'error': err_msg, 'field': 'username'}), 400
                 flash(err_msg, 'error')
-                return redirect(url_for('index'))
+                return render_template('register.html')
 
             # Check if email already exists
-            if User.query.filter_by(email=email).first():
-                err_msg = f'An account with email "{email}" already exists.'
+            existing_email = User.query.filter(User.email.ilike(email)).first()
+            if existing_email:
+                err_msg = f'An account with email "{email}" already exists. Please sign in or use another email.'
                 if is_ajax:
-                    return jsonify({'success': False, 'error': err_msg}), 400
+                    return jsonify({'success': False, 'error': err_msg, 'field': 'email'}), 400
                 flash(err_msg, 'error')
-                return redirect(url_for('index'))
+                return render_template('register.html')
 
             # Only allow clinician registration through this form
             if user_type != 'clinician':
@@ -62,21 +74,20 @@ def register():
                 if is_ajax:
                     return jsonify({'success': False, 'error': err_msg}), 400
                 flash(err_msg, 'error')
-                return redirect(url_for('index'))
+                return render_template('register.html')
 
-            profession = (request.form.get('profession') or (request.json.get('profession') if request.is_json else '')).strip()
             if not profession:
                 err_msg = 'Please select your profession.'
                 if is_ajax:
-                    return jsonify({'success': False, 'error': err_msg}), 400
+                    return jsonify({'success': False, 'error': err_msg, 'field': 'profession'}), 400
                 flash(err_msg, 'error')
-                return redirect(url_for('index'))
+                return render_template('register.html')
 
             # Create new user
             user = User(
                 username=username,
                 email=email,
-                user_type=user_type,
+                user_type='clinician',
                 first_name=first_name,
                 last_name=last_name
             )
@@ -84,8 +95,8 @@ def register():
             db.session.add(user)
             db.session.flush()  # Get user.id
 
-            license_number = (request.form.get('license_number') or (request.json.get('license_number') if request.is_json else '')).strip()
-            specialization = (request.form.get('specialization') or (request.json.get('specialization') if request.is_json else '')).strip()
+            license_number = (request.form.get('license_number') or (request.json.get('license_number') if request.is_json else '') or '').strip()
+            specialization = (request.form.get('specialization') or (request.json.get('specialization') if request.is_json else '') or '').strip()
             clinician_profile = ClinicianProfile(
                 user_id=user.id,
                 profession=profession,
@@ -98,7 +109,8 @@ def register():
             # Auto-login the user after successful registration
             session['user_id'] = user.id
             session['user_type'] = user.user_type
-            flash(f'Welcome to NeuroBeat, {user.first_name}!', 'success')
+            flash(f'Welcome to NeuroBeat, Dr. {user.first_name} {user.last_name}!', 'success')
+            logging.info(f"[/register] Successfully created clinician account id={user.id}, username='{username}'")
 
             if is_ajax:
                 return jsonify({'success': True, 'redirect': url_for('clinician_dashboard')}), 200
@@ -112,9 +124,10 @@ def register():
             if is_ajax:
                 return jsonify({'success': False, 'error': err_msg}), 500
             flash(err_msg, 'error')
-            return redirect(url_for('index'))
+            return render_template('register.html')
 
-    return redirect(url_for('index'))
+    # GET request: render the dedicated clinician registration page
+    return render_template('register.html')
 
 @app.route('/login', methods=['POST'])
 def login():

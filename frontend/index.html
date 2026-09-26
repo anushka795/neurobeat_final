@@ -209,7 +209,7 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST" action="/register">
+                <form method="POST" action="/register" novalidate>
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -238,7 +238,7 @@
                         <div class="row g-3 mt-1">
                             <div class="col-md-12">
                                 <label for="profession" class="form-label">Profession <span class="text-danger">*</span></label>
-                                <select class="form-select" id="profession" name="profession" required>
+                                <select class="form-select no-custom-dropdown" id="profession" name="profession" required>
                                     <option value="" disabled selected>Select Profession ▼</option>
                                     <option value="Physician">Physician</option>
                                     <option value="Neurologist">Neurologist</option>
