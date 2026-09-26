@@ -60,6 +60,7 @@ class ClinicianProfile(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    profession = db.Column(db.String(100))
     license_number = db.Column(db.String(50))
     specialization = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -97,23 +98,8 @@ class TherapySession(db.Model):
     
     def get_metrics(self):
         if self.metrics_data:
-            try:
-                return json.loads(self.metrics_data)
-            except Exception:
-                return {}
+            return json.loads(self.metrics_data)
         return {}
-
-    @property
-    def mean_error_ms(self):
-        return self.get_metrics().get('meanAbsoluteErrorMs')
-
-    @property
-    def total_steps(self):
-        return self.get_metrics().get('totalSteps')
-
-    @property
-    def is_demo_mode(self):
-        return bool(self.get_metrics().get('is_demo'))
 
 class SessionMetrics(db.Model):
     __tablename__ = 'session_metrics'

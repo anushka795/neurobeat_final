@@ -3,8 +3,6 @@
  * Handles real-time session tracking, metrics collection, and UI updates
  */
 
-const API_BASE_URL = 'https://nuro-beats.onrender.com/api';
-
 class TherapySession {
     constructor(sessionId, initialBPM, targetBPM) {
         this.sessionId = sessionId;
@@ -32,13 +30,15 @@ class TherapySession {
         
         console.log(`Starting therapy session ${this.sessionId}`);
         
+        // Start periodic updates to server
         this.updateInterval = setInterval(() => {
             this.sendSessionUpdate();
-        }, 5000);
+        }, 5000); // Update every 5 seconds
         
+        // Start timer updates
         this.timerInterval = setInterval(() => {
             this.updateDuration();
-        }, 1000);
+        }, 1000); // Update every second
         
         this.updateUI();
     }
@@ -63,6 +63,7 @@ class TherapySession {
     resume() {
         this.isActive = true;
         
+        // Restart intervals
         this.updateInterval = setInterval(() => {
             this.sendSessionUpdate();
         }, 5000);
@@ -78,6 +79,7 @@ class TherapySession {
     async complete() {
         this.isActive = false;
         
+        // Clear intervals
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
         }
@@ -85,13 +87,15 @@ class TherapySession {
             clearInterval(this.timerInterval);
         }
         
+        // Calculate final metrics
         const finalAccuracy = this.calculateOverallAccuracy();
         this.duration = Math.floor((new Date() - this.startTime) / 1000);
         
         console.log(`Completing therapy session ${this.sessionId}`);
         
+        // Send completion data to server
         try {
-            const response = await fetch(`${API_BASE_URL}/sessions/${this.sessionId}/complete`, {
+            const response = await fetch(`/session/${this.sessionId}/complete`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -117,10 +121,17 @@ class TherapySession {
         }
     }
 
+    // Simulate accuracy calculation (in real implementation, this would use sensor data)
     calculateCurrentAccuracy() {
-        const baseAccuracy = 75 + Math.random() * 20;
+        // Simulate rhythm detection and accuracy calculation
+        // In a real implementation, this would analyze:
+        // - Step timing vs beat timing
+        // - Consistency of rhythm
+        // - Deviation from target tempo
+        
+        const baseAccuracy = 75 + Math.random() * 20; // 75-95% base range
         const bpmDeviation = Math.abs(this.currentBPM - this.targetBPM) / this.targetBPM;
-        const bpmPenalty = bpmDeviation * 30;
+        const bpmPenalty = bpmDeviation * 30; // Reduce accuracy based on BPM deviation
         
         const accuracy = Math.max(0, Math.min(100, baseAccuracy - bpmPenalty));
         
@@ -130,6 +141,7 @@ class TherapySession {
             accuracy: accuracy
         });
         
+        // Keep only last 50 accuracy measurements
         if (this.accuracyHistory.length > 50) {
             this.accuracyHistory.shift();
         }
@@ -145,13 +157,14 @@ class TherapySession {
     }
 
     updateBPM(newBPM) {
-        this.currentBPM = Math.max(40, Math.min(200, newBPM));
+        this.currentBPM = Math.max(40, Math.min(200, newBPM)); // Clamp BPM
         
         this.bpmHistory.push({
             timestamp: new Date(),
             bpm: this.currentBPM
         });
         
+        // Keep only last 100 BPM measurements
         if (this.bpmHistory.length > 100) {
             this.bpmHistory.shift();
         }
@@ -165,7 +178,7 @@ class TherapySession {
         const currentAccuracy = this.calculateCurrentAccuracy();
         
         try {
-            const response = await fetch(`${API_BASE_URL}/sessions/update`, {
+            const response = await fetch('/session/update', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -180,9 +193,11 @@ class TherapySession {
             if (response.ok) {
                 const data = await response.json();
                 
+                // Update BPM if server suggests adjustment
                 if (data.adjusted_bpm && data.adjusted_bpm !== this.currentBPM) {
                     this.updateBPM(data.adjusted_bpm);
                     
+                    // Update audio engine if available
                     if (typeof adjustAudioTempo === 'function') {
                         adjustAudioTempo(data.adjusted_bpm);
                     }
@@ -212,23 +227,27 @@ class TherapySession {
     }
 
     updateUI() {
+        // Update BPM display
         const bpmElement = document.getElementById('currentBPM');
         if (bpmElement) {
             bpmElement.textContent = Math.round(this.currentBPM);
         }
 
+        // Update accuracy display
         const accuracyElement = document.getElementById('accuracy');
         if (accuracyElement) {
             const accuracy = Math.round(this.metrics.currentAccuracy);
             accuracyElement.textContent = `${accuracy}%`;
         }
 
+        // Update progress bar
         const progressBar = document.getElementById('accuracyProgress');
         if (progressBar) {
             const accuracy = Math.round(this.metrics.currentAccuracy);
             progressBar.style.width = `${accuracy}%`;
             progressBar.textContent = `${accuracy}% Accuracy`;
             
+            // Update color based on accuracy
             progressBar.className = 'progress-bar';
             if (accuracy >= 80) {
                 progressBar.classList.add('bg-success');
@@ -250,6 +269,7 @@ class TherapySession {
                `BPM range: ${bpmRange}. Average accuracy: ${Math.round(avgAccuracy)}%.`;
     }
 
+    // Get session statistics for display
     getSessionStats() {
         return {
             duration: this.duration,
@@ -264,14 +284,17 @@ class TherapySession {
     }
 }
 
+// Global session instance
 let currentSession = null;
 
+// Initialize session
 function initializeSession(sessionId, initialBPM, targetBPM) {
     currentSession = new TherapySession(sessionId, initialBPM, targetBPM);
     console.log('Session initialized:', sessionId);
     return currentSession;
 }
 
+// Session control functions
 function startCurrentSession() {
     if (currentSession) {
         currentSession.start();
@@ -301,10 +324,12 @@ async function completeCurrentSession() {
     return false;
 }
 
+// Get current session stats
 function getCurrentSessionStats() {
     return currentSession ? currentSession.getSessionStats() : null;
 }
 
+// Auto-save session data to local storage for recovery
 function autoSaveSession() {
     if (currentSession && currentSession.isActive) {
         const sessionData = {
@@ -320,11 +345,13 @@ function autoSaveSession() {
     }
 }
 
+// Recover session from local storage
 function recoverSession() {
     const savedSession = localStorage.getItem('neurobeat_session');
     if (savedSession) {
         try {
             const sessionData = JSON.parse(savedSession);
+            // Could implement session recovery logic here
             console.log('Found saved session data:', sessionData);
             return sessionData;
         } catch (error) {
@@ -334,8 +361,10 @@ function recoverSession() {
     return null;
 }
 
+// Clear saved session data
 function clearSavedSession() {
     localStorage.removeItem('neurobeat_session');
 }
 
-setInterval(autoSaveSession, 30000);
+// Auto-save periodically
+setInterval(autoSaveSession, 30000); // Save every 30 seconds

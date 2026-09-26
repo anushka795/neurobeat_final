@@ -121,12 +121,19 @@ class TherapySession {
         }
     }
 
-    // Real accuracy calculation using NuroSync engine
+    // Simulate accuracy calculation (in real implementation, this would use sensor data)
     calculateCurrentAccuracy() {
-        let accuracy = 85;
-        if (window.nuroSync && typeof window.nuroSync.getCurrentAccuracy === 'function') {
-            accuracy = window.nuroSync.getCurrentAccuracy();
-        }
+        // Simulate rhythm detection and accuracy calculation
+        // In a real implementation, this would analyze:
+        // - Step timing vs beat timing
+        // - Consistency of rhythm
+        // - Deviation from target tempo
+        
+        const baseAccuracy = 75 + Math.random() * 20; // 75-95% base range
+        const bpmDeviation = Math.abs(this.currentBPM - this.targetBPM) / this.targetBPM;
+        const bpmPenalty = bpmDeviation * 30; // Reduce accuracy based on BPM deviation
+        
+        const accuracy = Math.max(0, Math.min(100, baseAccuracy - bpmPenalty));
         
         this.metrics.currentAccuracy = accuracy;
         this.accuracyHistory.push({

@@ -18,36 +18,36 @@ class ProgressChartManager {
                     display: true,
                     grid: {
                         display: true,
-                        color: 'rgba(255, 255, 255, 0.1)'
+                        color: 'rgba(0, 0, 0, 0.06)'
                     },
                     ticks: {
-                        color: '#6c757d'
+                        color: '#64748b'
                     }
                 },
                 y: {
                     display: true,
                     grid: {
                         display: true,
-                        color: 'rgba(255, 255, 255, 0.1)'
+                        color: 'rgba(0, 0, 0, 0.06)'
                     },
                     ticks: {
-                        color: '#6c757d'
+                        color: '#64748b'
                     }
                 }
             },
             plugins: {
                 legend: {
                     labels: {
-                        color: '#dee2e6',
+                        color: '#042046',
                         usePointStyle: true,
                         padding: 20
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    backgroundColor: '#042046',
                     titleColor: '#fff',
                     bodyColor: '#fff',
-                    borderColor: '#007bff',
+                    borderColor: '#01aac5',
                     borderWidth: 1
                 }
             }
@@ -81,8 +81,8 @@ class ProgressChartManager {
                     {
                         label: 'BPM',
                         data: data.bpm_values || [],
-                        borderColor: '#007bff',
-                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderColor: '#01aac5',
+                        backgroundColor: 'rgba(1, 170, 197, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 4,
@@ -115,11 +115,11 @@ class ProgressChartManager {
                         title: {
                             display: true,
                             text: 'BPM',
-                            color: '#007bff'
+                            color: '#01aac5'
                         },
                         grid: {
                             drawOnChartArea: false,
-                            color: 'rgba(255, 255, 255, 0.1)'
+                            color: 'rgba(0, 0, 0, 0.06)'
                         },
                         ticks: {
                             color: '#6c757d'
@@ -175,8 +175,8 @@ class ProgressChartManager {
                     {
                         label: 'Current BPM',
                         data: [],
-                        borderColor: '#007bff',
-                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderColor: '#01aac5',
+                        backgroundColor: 'rgba(1, 170, 197, 0.1)',
                         fill: true,
                         tension: 0.4,
                         pointRadius: 2
@@ -302,8 +302,8 @@ class ProgressChartManager {
                     {
                         label: 'Sessions Completed',
                         data: weeklyData.sessionCounts || [],
-                        backgroundColor: 'rgba(0, 123, 255, 0.6)',
-                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(1, 170, 197, 0.6)',
+                        borderColor: '#01aac5',
                         borderWidth: 1,
                         yAxisID: 'y'
                     },
@@ -331,7 +331,7 @@ class ProgressChartManager {
                         title: {
                             display: true,
                             text: 'Sessions',
-                            color: '#007bff'
+                            color: '#01aac5'
                         }
                     },
                     y1: {

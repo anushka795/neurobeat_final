@@ -1,14 +1,15 @@
 
-import os
 import requests
 import json
 import logging
 from typing import Dict, Optional
 import random
 
+import os
+
 class BeatGenerator:
     def __init__(self):
-        self.api_token = os.environ.get("HUGGINGFACE_API_TOKEN")
+        self.api_token = os.environ.get("HUGGINGFACE_API_TOKEN", "")
         self.base_url = "https://api-inference.huggingface.co/models"
         
         # Define beat sound patterns for different user preferences
@@ -150,41 +151,8 @@ class BeatGenerator:
         return self._call_text_to_audio_api(prompt, bpm, 'metronome')
     
     def _call_text_to_audio_api(self, prompt: str, bpm: int, sound_type: str) -> Optional[str]:
-        """Call Hugging Face text-to-audio API - Currently using local fallback due to API permissions"""
-        try:
-            # Try a different audio generation model
-            model_url = f"{self.base_url}/facebook/musicgen-small"
-            
-            headers = {
-                "Authorization": f"Bearer {self.api_token}",
-                "Content-Type": "application/json"
-            }
-            
-            # More specific prompt for music generation
-            audio_prompt = f"{sound_type} rhythm {bpm} BPM therapeutic beat medical rehabilitation"
-            
-            payload = {
-                "inputs": audio_prompt,
-                "parameters": {
-                    "max_new_tokens": 512,
-                    "do_sample": True
-                }
-            }
-            
-            response = requests.post(model_url, headers=headers, json=payload, timeout=30)
-            
-            if response.status_code == 200:
-                logging.info("Successfully generated audio via API")
-                return f"api_audio:{sound_type}:{bpm}"
-            else:
-                logging.warning(f"API request failed: {response.status_code} - {response.text}")
-                # Return local audio generation instead
-                return self._generate_local_audio_url(bpm, sound_type)
-                
-        except Exception as e:
-            logging.warning(f"Audio API unavailable, using local generation: {str(e)}")
-            # Fallback to local audio generation
-            return self._generate_local_audio_url(bpm, sound_type)
+        """Generate audio configuration for client-side Tone.js audio generation"""
+        return self._generate_local_audio_url(bpm, sound_type)
     
     def _generate_local_audio_url(self, bpm: int, sound_type: str) -> str:
         """Generate local audio configuration for client-side generation"""

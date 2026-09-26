@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function convertToVisibleDropdown(selectElement) {
     // Skip if already converted
-    if (selectElement.style.display === 'none') return;
+    if (selectElement.style.display === 'none' || selectElement.dataset.converted === 'true') return;
+    selectElement.dataset.converted = 'true';
 
     // Create container for the custom dropdown
     const container = document.createElement('div');
@@ -34,8 +35,13 @@ function convertToVisibleDropdown(selectElement) {
     const hiddenInput = document.createElement('input');
     hiddenInput.type = 'hidden';
     hiddenInput.name = selectName;
-    hiddenInput.id = selectId;
-    hiddenInput.required = selectRequired;
+    hiddenInput.id = selectId ? selectId + '_hidden' : '';
+
+    // IMPORTANT: Remove name and required from original select so HTML5
+    // constraint validation never encounters an unfocusable hidden element!
+    selectElement.removeAttribute('name');
+    selectElement.removeAttribute('required');
+    selectElement.required = false;
 
     // Create options in the visible dropdown
     let hasSelectedOption = false;
@@ -47,11 +53,11 @@ function convertToVisibleDropdown(selectElement) {
         optionDiv.textContent = option.textContent;
         optionDiv.dataset.value = option.value;
 
-        // Set selected option or first non-empty option as default
-        if ((selectElement.value && option.value === selectElement.value) || 
-            (!hasSelectedOption && index >= 1)) {
+        // Set selected option if pre-selected
+        if (option.selected && option.value) {
             optionDiv.classList.add('selected');
             hiddenInput.value = option.value;
+            selectElement.value = option.value;
             hasSelectedOption = true;
         }
 
@@ -65,8 +71,14 @@ function convertToVisibleDropdown(selectElement) {
             // Add selected class to clicked option with animation
             this.classList.add('selected');
 
-            // Update hidden input value
+            // Update hidden input value AND original select value
             hiddenInput.value = this.dataset.value;
+            selectElement.value = this.dataset.value;
+
+            // Remove error state if present
+            dropdown.style.borderColor = '';
+            const err = container.querySelector('.dropdown-error-msg');
+            if (err) err.remove();
 
             // Trigger change event
             const changeEvent = new Event('change', { bubbles: true });
@@ -95,6 +107,27 @@ function convertToVisibleDropdown(selectElement) {
     container.appendChild(hiddenInput);
     container.appendChild(dropdown);
 
+    // If select was required, intercept form submit to validate selection
+    if (selectRequired) {
+        const form = selectElement.closest('form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                if (!hiddenInput.value) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropdown.style.borderColor = '#dc3545';
+                    if (!container.querySelector('.dropdown-error-msg')) {
+                        const err = document.createElement('div');
+                        err.className = 'dropdown-error-msg text-danger small mt-1';
+                        err.textContent = 'Please select an option.';
+                        container.appendChild(err);
+                    }
+                    dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            });
+        }
+    }
+
     // Replace the original select element
     selectElement.parentNode.insertBefore(container, selectElement);
     selectElement.style.display = 'none';
@@ -105,7 +138,7 @@ function convertToVisibleDropdown(selectElement) {
     }
 
     // Store reference for easier access
-    container.dataset.originalSelect = selectElement.id || selectElement.name;
+    container.dataset.originalSelect = selectId || selectName;
 }
 
 // Function to get value from custom dropdown

@@ -62,6 +62,17 @@ def migrate_database():
                     if "duplicate column name" not in str(e):
                         print(f"Error adding session column {column_name}: {e}")
         
+        # Add profession column to clinician_profiles if it doesn't exist
+        cursor.execute("PRAGMA table_info(clinician_profiles)")
+        existing_clinician_columns = [row[1] for row in cursor.fetchall()]
+        if 'profession' not in existing_clinician_columns:
+            try:
+                cursor.execute("ALTER TABLE clinician_profiles ADD COLUMN profession VARCHAR(100)")
+                print("Added column: profession to clinician_profiles")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" not in str(e):
+                    print(f"Error adding profession column: {e}")
+        
         conn.commit()
         print("Database migration completed successfully!")
         

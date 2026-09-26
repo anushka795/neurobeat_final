@@ -9,7 +9,7 @@
         <div class="text-center mb-5">
             <h1 class="display-4 mb-4">
                 <i data-feather="activity" class="me-3"></i>
-                NeuroBeat
+                Neuro<span class="brand-highlight">Beat</span>
             </h1>
             <p class="lead">AI-Powered Music Therapy for Parkinson's & Stroke Recovery</p>
             <p class="text-muted">Clinical-grade neurorehabilitation through personalized rhythmic beats and real-time adaptation</p>
@@ -30,11 +30,11 @@
                         <form method="POST" action="{{ url_for('login') }}">
                             <div class="mb-3">
                                 <label for="username" class="form-label">Username</label>
-                                <input type="text" class="form-control" id="username" name="username" required>
+                                <input type="text" class="form-control" id="username" name="username" placeholder="Username" required>
                             </div>
                             <div class="mb-3">
                                 <label for="password" class="form-label">Password</label>
-                                <input type="password" class="form-control" id="password" name="password" required>
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
                             </div>
                             <button type="submit" class="btn btn-primary w-100">
                                 <i data-feather="log-in" class="me-2"></i>
@@ -48,12 +48,41 @@
             <!-- Register Card -->
             <div class="col-md-6">
                 <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <i data-feather="user-plus" class="me-2"></i>
-                            Clinician Registration
-                        </h5>
-                        <p class="card-text text-muted">Register as a healthcare provider to manage patients</p>
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <div>
+                            <h5 class="card-title">
+                                <i data-feather="user-plus" class="me-2"></i>
+                                Clinician Registration
+                            </h5>
+                            <p class="card-text text-muted">Register as a healthcare provider to manage patients</p>
+
+                            <ul class="list-unstyled my-3 small text-muted">
+                                <li class="mb-2 d-flex align-items-center">
+                                    <span class="badge bg-info p-1 me-2 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 20px;">
+                                        <i data-feather="check" style="width: 12px; height: 12px;"></i>
+                                    </span>
+                                    Manage patients
+                                </li>
+                                <li class="mb-2 d-flex align-items-center">
+                                    <span class="badge bg-info p-1 me-2 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 20px;">
+                                        <i data-feather="check" style="width: 12px; height: 12px;"></i>
+                                    </span>
+                                    Track progress
+                                </li>
+                                <li class="mb-2 d-flex align-items-center">
+                                    <span class="badge bg-info p-1 me-2 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 20px;">
+                                        <i data-feather="check" style="width: 12px; height: 12px;"></i>
+                                    </span>
+                                    Access detailed analytics
+                                </li>
+                                <li class="mb-3 d-flex align-items-center">
+                                    <span class="badge bg-info p-1 me-2 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 20px;">
+                                        <i data-feather="check" style="width: 12px; height: 12px;"></i>
+                                    </span>
+                                    Provide personalized therapy
+                                </li>
+                            </ul>
+                        </div>
 
                         <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#registerModal">
                             <i data-feather="user-plus" class="me-2"></i>
@@ -66,32 +95,45 @@
 
         <!-- Features Section -->
         <div class="row mt-5">
-            <div class="col-12">
-                <h3 class="text-center mb-4">Key Features</h3>
-                <div class="row g-4">
+            <div class="col-12 text-center">
+                <h3 class="key-features-heading">Key Features</h3>
+                <div class="row g-4 mt-2">
                     <div class="col-md-4">
                         <div class="text-center">
-                            <i data-feather="target" class="mb-3" style="width: 48px; height: 48px;"></i>
+                            <div class="feature-icon-circle mx-auto">
+                                <i data-feather="target"></i>
+                            </div>
                             <h5>Personalized Therapy</h5>
-                            <p class="text-muted">AI-generated beats tailored to your baseline and progress</p>
+                            <p class="text-muted small">AI-generated beats tailored to your baseline and progress</p>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center">
-                            <i data-feather="trending-up" class="mb-3" style="width: 48px; height: 48px;"></i>
+                            <div class="feature-icon-circle mx-auto">
+                                <i data-feather="trending-up"></i>
+                            </div>
                             <h5>Real-time Adaptation</h5>
-                            <p class="text-muted">Automatic BPM adjustment based on your performance</p>
+                            <p class="text-muted small">Automatic BPM adjustment based on your performance</p>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center">
-                            <i data-feather="bar-chart-2" class="mb-3" style="width: 48px; height: 48px;"></i>
+                            <div class="feature-icon-circle mx-auto">
+                                <i data-feather="bar-chart-2"></i>
+                            </div>
                             <h5>Progress Tracking</h5>
-                            <p class="text-muted">Detailed analytics and clinician dashboard monitoring</p>
+                            <p class="text-muted small">Detailed analytics and clinician dashboard monitoring</p>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Footer Divider Tagline -->
+        <div class="text-center mt-5 pt-3">
+            <p class="text-muted small fw-semibold" style="letter-spacing: 0.15em;">
+                BETTER MOVEMENT &nbsp;|&nbsp; BETTER RECOVERY &nbsp;|&nbsp; THROUGH RHYTHM
+            </p>
         </div>
     </div>
 </div>
@@ -107,48 +149,66 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('register') }}">
+            <form id="clinicianRegisterForm" method="POST" action="{{ url_for('register') }}">
                 <div class="modal-body">
+                    <!-- Inline Error Alert -->
+                    <div id="registerAlert" class="alert alert-danger py-2 px-3 small mb-3" style="display: none;"></div>
+
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="reg_first_name" class="form-label">First Name</label>
+                            <label for="reg_first_name" class="form-label">First Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="reg_first_name" name="first_name" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="reg_last_name" class="form-label">Last Name</label>
+                            <label for="reg_last_name" class="form-label">Last Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="reg_last_name" name="last_name" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="reg_username" class="form-label">Username</label>
-                            <input type="text" class="form-control" id="reg_username" name="username" required>
+                            <label for="reg_username" class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="reg_username" name="username" required autocomplete="username">
                         </div>
                         <div class="col-md-6">
-                            <label for="reg_email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="reg_email" name="email" required>
+                            <label for="reg_email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="reg_email" name="email" required autocomplete="email">
                         </div>
                         <div class="col-md-6">
-                            <label for="reg_password" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="reg_password" name="password" required>
+                            <label for="reg_password" class="form-label">Password <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="reg_password" name="password" required autocomplete="new-password">
                         </div>
-                        
                     </div>
 
                     <!-- Clinician-only registration -->
-                    <div class="row g-3">
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-12">
+                            <label for="profession" class="form-label">Profession <span class="text-danger">*</span></label>
+                            <select class="form-select" id="profession" name="profession" required>
+                                <option value="" disabled selected>Select Profession ▼</option>
+                                <option value="Physician">Physician</option>
+                                <option value="Neurologist">Neurologist</option>
+                                <option value="Physiotherapist">Physiotherapist</option>
+                                <option value="Occupational Therapist">Occupational Therapist</option>
+                                <option value="Speech-Language Pathologist">Speech-Language Pathologist</option>
+                                <option value="Music Therapist">Music Therapist</option>
+                                <option value="Clinical Psychologist">Clinical Psychologist</option>
+                                <option value="Rehabilitation Specialist">Rehabilitation Specialist</option>
+                                <option value="Nurse">Nurse</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
                         <div class="col-md-6">
                             <label for="license_number" class="form-label">License Number</label>
-                            <input type="text" class="form-control" id="license_number" name="license_number">
+                            <input type="text" class="form-control" id="license_number" name="license_number" placeholder="e.g., MED-12345">
                         </div>
                         <div class="col-md-6">
                             <label for="specialization" class="form-label">Specialization</label>
-                            <input type="text" class="form-control" id="specialization" name="specialization" placeholder="e.g., Physical Therapy, Neurology">
+                            <input type="text" class="form-control" id="specialization" name="specialization" placeholder="e.g., Neurological Rehabilitation">
                         </div>
                     </div>
                     <input type="hidden" name="user_type" value="clinician">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" id="btnSubmitRegister">
                         <i data-feather="user-plus" class="me-2"></i>
                         Create Account
                     </button>
@@ -162,19 +222,77 @@
 
 {% block scripts %}
 <script>
-// Set up event listeners when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize feather icons
     if (typeof feather !== 'undefined') {
         feather.replace();
     }
 
-    // Ensure form submission works
-    const registerForm = document.querySelector('#registerModal form');
-    if (registerForm) {
-        registerForm.addEventListener('submit', function(e) {
-            console.log('Form submitting...');
-            console.log('Form validation passed, submitting...');
+    const regForm = document.getElementById('clinicianRegisterForm');
+    const alertBox = document.getElementById('registerAlert');
+    const submitBtn = document.getElementById('btnSubmitRegister');
+
+    if (regForm) {
+        regForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Clear previous alert
+            if (alertBox) {
+                alertBox.style.display = 'none';
+                alertBox.textContent = '';
+            }
+
+            // Get form data
+            const formData = new FormData(regForm);
+
+            // Double check profession
+            const profVal = formData.get('profession') || '';
+            if (!profVal.trim()) {
+                if (alertBox) {
+                    alertBox.textContent = 'Please select your profession.';
+                    alertBox.style.display = 'block';
+                }
+                return;
+            }
+
+            // Show loading state on button
+            const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating Account...';
+            }
+
+            try {
+                const response = await fetch(regForm.action || '/register', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Redirect to clinician dashboard
+                    window.location.href = data.redirect || '/clinician/dashboard';
+                } else {
+                    // Display error in modal alert box
+                    if (alertBox) {
+                        alertBox.textContent = data.error || 'Registration failed. Please check your information and try again.';
+                        alertBox.style.display = 'block';
+                    }
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                        if (typeof feather !== 'undefined') feather.replace();
+                    }
+                }
+            } catch (err) {
+                console.error('Registration fetch error:', err);
+                // Fallback to standard form submit if fetch fails
+                regForm.submit();
+            }
         });
     }
 });

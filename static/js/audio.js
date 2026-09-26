@@ -209,11 +209,6 @@ class NeuroAudioEngine {
                     break;
             }
 
-            // Record beat timestamp in NuroSync
-            if (window.nuroSync && typeof window.nuroSync.recordBeat === 'function') {
-                window.nuroSync.recordBeat(performance.now() / 1000);
-            }
-
             // Trigger beat visual callback if set
             if (this.beatCallback) {
                 Tone.Draw.schedule(() => {
@@ -482,7 +477,7 @@ function triggerBeatVisualization() {
         // Reset after short duration
         setTimeout(() => {
             beatIndicator.style.transform = 'scale(0.8)';
-            beatVisualizer.style.borderColor = '#dee2e6';
+            beatVisualizer.style.borderColor = '#c8f1f6';
         }, 100);
     }
 }

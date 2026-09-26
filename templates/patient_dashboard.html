@@ -87,7 +87,7 @@
                     <div class="col-md-6">
                         <div class="card border-primary h-100">
                             <div class="card-body text-center">
-                                <i data-feather="activity" class="mb-3" style="width: 48px; height: 48px; color: #0d6efd;"></i>
+                                <i data-feather="activity" class="mb-3" style="width: 48px; height: 48px; color: #01aac5;"></i>
                                 <h5>Gait Training (RAS)</h5>
                                 <p class="text-muted">Rhythmic Auditory Stimulation for walking recovery</p>
                                 <small class="text-info">Recommended BPM: 40-60</small>
@@ -170,7 +170,7 @@
                     <div class="col-md-6">
                         <div class="card border-primary h-100">
                             <div class="card-body text-center">
-                                <i data-feather="activity" class="mb-3" style="width: 48px; height: 48px; color: #0d6efd;"></i>
+                                <i data-feather="activity" class="mb-3" style="width: 48px; height: 48px; color: #01aac5;"></i>
                                 <h5>Gait Trainer</h5>
                                 <p class="text-muted">Improve walking rhythm and balance with musical cues</p>
                                 <button type="button" class="btn btn-primary" onclick="startSession('gait_trainer')">
@@ -366,11 +366,12 @@ async function startSession(sessionType) {
             const data = await response.json();
             window.location.href = `/session/${data.session_id}`;
         } else {
-            alert('Failed to start session. Please try again.');
+            const errData = await response.json().catch(() => ({}));
+            alert(errData.error || errData.details || 'Failed to start session. Please try again.');
         }
     } catch (error) {
         console.error('Error starting session:', error);
-        alert('Failed to start session. Please try again.');
+        alert('Failed to start session: ' + (error.message || 'Please try again.'));
     }
 }
 
@@ -450,11 +451,12 @@ async function startStrokeSession(sessionType) {
 
             window.location.href = `/session/${data.session_id}`;
         } else {
-            alert('Failed to start session. Please try again.');
+            const errData = await response.json().catch(() => ({}));
+            alert(errData.error || errData.details || 'Failed to start session. Please try again.');
         }
     } catch (error) {
         console.error('Error starting stroke session:', error);
-        alert('Failed to start session. Please try again.');
+        alert('Failed to start session: ' + (error.message || 'Please try again.'));
     }
 }
 </script>

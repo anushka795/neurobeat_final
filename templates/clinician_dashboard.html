@@ -9,7 +9,22 @@
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <h2>Clinician Dashboard</h2>
-                <p class="text-muted">Dr. {{ user.first_name }} {{ user.last_name }}</p>
+                <p class="text-muted mb-1">Dr. {{ user.first_name }} {{ user.last_name }}</p>
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                    <span class="badge profession-badge" style="background: rgba(1, 170, 197, 0.15); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.35);">
+                        <i data-feather="briefcase" style="width: 13px; height: 13px; vertical-align: -1px; margin-right: 4px;"></i>
+                        Profession: <strong>{{ clinician_profile.profession or 'Not specified' }}</strong>
+                    </span>
+                    <span class="badge specialization-badge" style="background: rgba(7, 27, 42, 0.08); color: var(--text-secondary); border: 1px solid rgba(1, 170, 197, 0.2);">
+                        <i data-feather="award" style="width: 13px; height: 13px; vertical-align: -1px; margin-right: 4px;"></i>
+                        Specialization: <strong>{{ clinician_profile.specialization or 'General' }}</strong>
+                    </span>
+                    {% if clinician_profile.license_number %}
+                    <span class="badge text-muted" style="background: transparent; border: 1px solid var(--border-color, #e2e8f0);">
+                        License: {{ clinician_profile.license_number }}
+                    </span>
+                    {% endif %}
+                </div>
             </div>
             <div>
                 <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createPatientModal">
@@ -26,20 +41,20 @@
 
     <!-- Stats Overview -->
     <div class="col-12 mb-4">
-        <div class="row g-4">
-            <div class="col-md-3">
-                <div class="card">
+        <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-lg-5">
+            <div class="col">
+                <div class="card h-100">
                     <div class="card-body text-center">
-                        <i data-feather="users" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <i data-feather="users" class="mb-2" style="width: 28px; height: 28px;"></i>
                         <h4>{{ patients|length }}</h4>
-                        <p class="text-muted mb-0">Active Patients</p>
+                        <p class="text-muted mb-0 small">Active Patients</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card">
+            <div class="col">
+                <div class="card h-100">
                     <div class="card-body text-center">
-                        <i data-feather="activity" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <i data-feather="activity" class="mb-2" style="width: 28px; height: 28px;"></i>
                         <h4>
                             {% set total_sessions = 0 %}
                             {% for patient in patients %}
@@ -47,25 +62,34 @@
                             {% endfor %}
                             {{ total_sessions }}
                         </h4>
-                        <p class="text-muted mb-0">Total Sessions</p>
+                        <p class="text-muted mb-0 small">Total Sessions</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card">
+            <div class="col">
+                <div class="card h-100">
                     <div class="card-body text-center">
-                        <i data-feather="user-check" class="mb-2" style="width: 32px; height: 32px;"></i>
+                        <i data-feather="user-check" class="mb-2" style="width: 28px; height: 28px;"></i>
                         <h4>{{ unassigned_patients|length }}</h4>
-                        <p class="text-muted mb-0">Unassigned</p>
+                        <p class="text-muted mb-0 small">Unassigned</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card">
+            <div class="col">
+                <div class="card h-100">
                     <div class="card-body text-center">
-                        <i data-feather="trending-up" class="mb-2" style="width: 32px; height: 32px;"></i>
-                        <h4>{{ clinician_profile.specialization or 'General' }}</h4>
-                        <p class="text-muted mb-0">Specialization</p>
+                        <i data-feather="briefcase" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h5 class="text-truncate mb-1" title="{{ clinician_profile.profession or 'Not specified' }}">{{ clinician_profile.profession or 'Not specified' }}</h5>
+                        <p class="text-muted mb-0 small">Profession</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i data-feather="award" class="mb-2" style="width: 28px; height: 28px;"></i>
+                        <h5 class="text-truncate mb-1" title="{{ clinician_profile.specialization or 'General' }}">{{ clinician_profile.specialization or 'General' }}</h5>
+                        <p class="text-muted mb-0 small">Specialization</p>
                     </div>
                 </div>
             </div>
@@ -167,6 +191,9 @@
                                             <a href="{{ url_for('progress_view', patient_id=patient.id) }}" class="btn btn-outline-primary" title="View Progress">
                                                 <i data-feather="bar-chart-2"></i>
                                             </a>
+                                            <button type="button" class="btn btn-outline-info" onclick="openAiReportModal({{ patient.id }}, '{{ patient.user.first_name }} {{ patient.user.last_name }}')" title="Generate AI Clinical SOAP Report">
+                                                <i data-feather="cpu"></i>
+                                            </button>
                                             <button type="button" class="btn btn-outline-secondary" onclick="setBaseline({{ patient.id }})" title="Set Baseline">
                                                 <i data-feather="settings"></i>
                                             </button>
@@ -475,5 +502,151 @@ function toggleStrokeFields() {
         }
     }
 }
+
+// ==========================================
+// Few-Shot Gemini AI Clinical Report Modal
+// ==========================================
+let currentAiPatientId = null;
+let currentAiReportModal = null;
+
+function openAiReportModal(patientId, patientName) {
+    currentAiPatientId = patientId;
+    document.getElementById('aiReportPatientName').textContent = patientName || `Patient #${patientId}`;
+    
+    const modalEl = document.getElementById('aiReportModal');
+    if (!currentAiReportModal) {
+        currentAiReportModal = new bootstrap.Modal(modalEl);
+    }
+    currentAiReportModal.show();
+    if (typeof feather !== 'undefined') feather.replace();
+    
+    generateAiReport();
+}
+
+async function generateAiReport() {
+    if (!currentAiPatientId) return;
+    
+    const loadingEl = document.getElementById('aiReportLoading');
+    const contentEl = document.getElementById('aiReportContent');
+    const errorEl = document.getElementById('aiReportError');
+    const textEl = document.getElementById('aiReportText');
+    const timeEl = document.getElementById('aiReportTimestamp');
+    
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    if (typeof feather !== 'undefined') feather.replace();
+    
+    try {
+        const response = await fetch(`/api/clinician/ai-report/${currentAiPatientId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && (data.success || data.report)) {
+            textEl.textContent = data.report;
+            timeEl.textContent = `Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`;
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+            if (typeof feather !== 'undefined') feather.replace();
+        } else {
+            throw new Error(data.error || 'Failed to generate clinical report');
+        }
+    } catch (err) {
+        console.error('Error generating AI report:', err);
+        document.getElementById('aiReportErrorText').textContent = err.message || 'Error communicating with AI engine';
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        if (typeof feather !== 'undefined') feather.replace();
+    }
+}
+
+function copyAiReport() {
+    const text = document.getElementById('aiReportText').textContent;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btnCopyReport');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<i data-feather="check" class="me-1"></i> Copied!';
+        if (typeof feather !== 'undefined') feather.replace();
+        setTimeout(() => {
+            btn.innerHTML = origHtml;
+            if (typeof feather !== 'undefined') feather.replace();
+        }, 2000);
+    }).catch(err => {
+        console.error('Clipboard copy failed:', err);
+    });
+}
 </script>
+
+<!-- AI Clinical Report Modal (Gemini Few-Shot) -->
+<div class="modal fade" id="aiReportModal" tabindex="-1" aria-labelledby="aiReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content shadow">
+            <div class="modal-header border-bottom">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0" id="aiReportModalLabel">
+                        <i data-feather="cpu" class="me-2 text-info"></i>
+                        AI Clinical Report &bull; <span id="aiReportPatientName">Patient</span>
+                    </h5>
+                    <small class="text-muted">Generated via Gemini Few-Shot Structured Clinical Synthesis</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Loading State -->
+                <div id="aiReportLoading" class="text-center py-5">
+                    <div class="spinner-border text-info mb-3" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h6 class="fw-semibold text-theme-adaptive mb-1">Synthesizing Longitudinal Telemetry...</h6>
+                    <p class="text-muted small mb-0" style="max-width: 420px; margin: 0 auto;">
+                        Analyzing session trajectories, motor rhythm adherence, cognitive load tolerance, and formatting structured SOAP clinical note.
+                    </p>
+                </div>
+
+                <!-- Report Content -->
+                <div id="aiReportContent" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="badge" style="background: rgba(1, 170, 197, 0.12); color: #01aac5; border: 1px solid rgba(1, 170, 197, 0.3);">
+                            <i data-feather="check-circle" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+                            Clinical SOAP Format
+                        </span>
+                        <small class="text-muted" id="aiReportTimestamp"></small>
+                    </div>
+
+                    <div class="card border-0" style="background: rgba(1, 170, 197, 0.04); border-left: 4px solid #01aac5 !important;">
+                        <div class="card-body p-3">
+                            <pre id="aiReportText" class="mb-0 text-theme-adaptive" style="white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 0.925rem; line-height: 1.6;"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error State -->
+                <div id="aiReportError" class="alert alert-danger py-3 px-4 mb-0" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <i data-feather="alert-circle" class="me-2" style="width: 20px; height: 20px;"></i>
+                        <div>
+                            <strong class="d-block">Error Generating Report</strong>
+                            <span id="aiReportErrorText" class="small">Unable to communicate with the clinical analysis engine.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-info" id="btnCopyReport" onclick="copyAiReport()">
+                    <i data-feather="copy" class="me-1"></i> Copy to Clipboard
+                </button>
+                <button type="button" class="btn btn-primary" onclick="generateAiReport()">
+                    <i data-feather="refresh-cw" class="me-1"></i> Regenerate
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

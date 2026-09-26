@@ -1,12 +1,23 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}NeuroBeat - AI-Powered Neurorehabilitation{% endblock %}</title>
     
-    <!-- Bootstrap CSS with Replit theme -->
-    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <!-- Theme Flash Prevention -->
+    <script>
+        (function() {
+            try {
+                var theme = localStorage.getItem('neurobeat_theme') || 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            } catch(e) {}
+        })();
+    </script>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <!-- Feather Icons -->
     <script src="https://unpkg.com/feather-icons"></script>
@@ -22,24 +33,31 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg border-bottom">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i data-feather="activity" class="me-2"></i>
-                NeuroBeat
+                <i data-feather="activity" class="me-2 brand-icon"></i>
+                <span class="brand-text">Neuro<span class="brand-highlight">Beat</span></span>
             </a>
             
-            {% if 'user_id' in session %}
-                <div class="navbar-nav ms-auto">
-                    <span class="navbar-text me-3">
-                        Welcome, {{ session.get('user_type', '').title() }}
-                    </span>
-                    <a class="nav-link" href="{{ url_for('logout') }}">
-                        <i data-feather="log-out" class="me-1"></i>
-                        Logout
-                    </a>
-                </div>
-            {% endif %}
+            <div class="d-flex align-items-center ms-auto">
+                <!-- Theme Toggle Button -->
+                <button type="button" class="theme-toggle-btn me-3" id="themeToggleBtn" aria-label="Toggle Light/Dark Theme" title="Toggle theme">
+                    <span id="themeToggleIcon">🌙</span>
+                </button>
+
+                {% if 'user_id' in session %}
+                    <div class="navbar-nav d-flex flex-row align-items-center">
+                        <span class="navbar-text me-3">
+                            Welcome, {{ session.get('user_type', '').title() }}
+                        </span>
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i data-feather="log-out" class="me-1"></i>
+                            Logout
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </nav>
 
@@ -63,7 +81,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-dark text-center py-3 mt-5">
+    <footer class="border-top text-center py-4 mt-5">
         <div class="container">
             <p class="mb-0 text-muted">
                 <i data-feather="heart" class="me-1"></i>
@@ -81,6 +99,46 @@
     <!-- Initialize Feather Icons -->
     <script>
         feather.replace();
+    </script>
+
+    <!-- Theme Toggle Controller -->
+    <script>
+        (function() {
+            function updateThemeToggleUI(theme) {
+                var icon = document.getElementById('themeToggleIcon');
+                var btn = document.getElementById('themeToggleBtn');
+                if (!btn) return;
+                if (theme === 'dark') {
+                    if (icon) icon.textContent = '☀';
+                    btn.setAttribute('title', 'Switch to Light Mode');
+                    btn.setAttribute('aria-label', 'Switch to Light Mode');
+                } else {
+                    if (icon) icon.textContent = '🌙';
+                    btn.setAttribute('title', 'Switch to Dark Mode');
+                    btn.setAttribute('aria-label', 'Switch to Dark Mode');
+                }
+            }
+
+            var currentTheme = 'light';
+            try {
+                currentTheme = localStorage.getItem('neurobeat_theme') || 'light';
+            } catch(e) {}
+            updateThemeToggleUI(currentTheme);
+
+            var toggleBtn = document.getElementById('themeToggleBtn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    var current = document.documentElement.getAttribute('data-theme') || 'light';
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.documentElement.setAttribute('data-bs-theme', next);
+                    try {
+                        localStorage.setItem('neurobeat_theme', next);
+                    } catch(e) {}
+                    updateThemeToggleUI(next);
+                });
+            }
+        })();
     </script>
     
     {% block scripts %}{% endblock %}

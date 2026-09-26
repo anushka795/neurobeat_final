@@ -3,7 +3,6 @@ from app import app, db
 from models import User, PatientProfile, ClinicianProfile, TherapySession, SessionMetrics, BaselineAssessment
 from datetime import datetime, timedelta
 import logging
-import os
 
 @app.route('/')
 def index():
@@ -19,23 +18,58 @@ def index():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration"""
+    """User registration for clinicians"""
     if request.method == 'POST':
+        is_ajax = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            'application/json' in request.headers.get('Accept', '') or
+            request.is_json
+        )
         try:
-            username = request.form['username']
-            email = request.form['email']
-            password = request.form['password']
-            user_type = request.form['user_type']
-            first_name = request.form['first_name']
-            last_name = request.form['last_name']
+            username = request.form.get('username') or (request.json.get('username') if request.is_json else None)
+            email = request.form.get('email') or (request.json.get('email') if request.is_json else None)
+            password = request.form.get('password') or (request.json.get('password') if request.is_json else None)
+            user_type = request.form.get('user_type', 'clinician')
+            first_name = request.form.get('first_name') or (request.json.get('first_name') if request.is_json else None)
+            last_name = request.form.get('last_name') or (request.json.get('last_name') if request.is_json else None)
 
-            # Check if user already exists
-            if User.query.filter_by(username=username).first():
-                flash('Username already exists', 'error')
+            if not username or not email or not password or not first_name or not last_name:
+                err_msg = 'Please fill out all required fields.'
+                if is_ajax:
+                    return jsonify({'success': False, 'error': err_msg}), 400
+                flash(err_msg, 'error')
                 return redirect(url_for('index'))
 
+            # Check if username already exists
+            if User.query.filter_by(username=username).first():
+                err_msg = f'Username "{username}" is already taken. Please choose another username.'
+                if is_ajax:
+                    return jsonify({'success': False, 'error': err_msg}), 400
+                flash(err_msg, 'error')
+                return redirect(url_for('index'))
+
+            # Check if email already exists
             if User.query.filter_by(email=email).first():
-                flash('Email already exists', 'error')
+                err_msg = f'An account with email "{email}" already exists.'
+                if is_ajax:
+                    return jsonify({'success': False, 'error': err_msg}), 400
+                flash(err_msg, 'error')
+                return redirect(url_for('index'))
+
+            # Only allow clinician registration through this form
+            if user_type != 'clinician':
+                err_msg = 'Only clinicians can register through this form.'
+                if is_ajax:
+                    return jsonify({'success': False, 'error': err_msg}), 400
+                flash(err_msg, 'error')
+                return redirect(url_for('index'))
+
+            profession = (request.form.get('profession') or (request.json.get('profession') if request.is_json else '')).strip()
+            if not profession:
+                err_msg = 'Please select your profession.'
+                if is_ajax:
+                    return jsonify({'success': False, 'error': err_msg}), 400
+                flash(err_msg, 'error')
                 return redirect(url_for('index'))
 
             # Create new user
@@ -48,22 +82,17 @@ def register():
             )
             user.set_password(password)
             db.session.add(user)
-            db.session.flush()  # Get the user ID
+            db.session.flush()  # Get user.id
 
-            # Only allow clinician registration
-            if user_type != 'clinician':
-                flash('Only clinicians can register through this form.', 'error')
-                return redirect(url_for('index'))
-
-            license_number = request.form.get('license_number', '')
-            specialization = request.form.get('specialization', '')
+            license_number = (request.form.get('license_number') or (request.json.get('license_number') if request.is_json else '')).strip()
+            specialization = (request.form.get('specialization') or (request.json.get('specialization') if request.is_json else '')).strip()
             clinician_profile = ClinicianProfile(
                 user_id=user.id,
+                profession=profession,
                 license_number=license_number,
                 specialization=specialization
             )
             db.session.add(clinician_profile)
-
             db.session.commit()
 
             # Auto-login the user after successful registration
@@ -71,12 +100,18 @@ def register():
             session['user_type'] = user.user_type
             flash(f'Welcome to NeuroBeat, {user.first_name}!', 'success')
 
+            if is_ajax:
+                return jsonify({'success': True, 'redirect': url_for('clinician_dashboard')}), 200
+
             return redirect(url_for('clinician_dashboard'))
 
         except Exception as e:
             db.session.rollback()
-            logging.error(f"Registration error: {str(e)}")
-            flash('Registration failed. Please try again.', 'error')
+            logging.error(f"Registration error: {str(e)}", exc_info=True)
+            err_msg = 'Registration failed. Please check your details and try again.'
+            if is_ajax:
+                return jsonify({'success': False, 'error': err_msg}), 500
+            flash(err_msg, 'error')
             return redirect(url_for('index'))
 
     return redirect(url_for('index'))
@@ -176,43 +211,67 @@ def clinician_dashboard():
 def start_session():
     """Start a new therapy session"""
     if 'user_id' not in session or session.get('user_type') != 'patient':
-        return jsonify({'error': 'Unauthorized'}), 401
+        return jsonify({'error': 'Unauthorized: Please log in as a patient'}), 401
 
     try:
         from beat_generator import BeatGenerator
 
         user = User.query.get(session['user_id'])
-        patient_profile = user.patient_profile
+        if not user:
+            return jsonify({'error': 'User not found'}), 401
 
-        session_type = request.json.get('session_type', 'gait_trainer')
-        initial_bpm = float(request.json.get('initial_bpm', 60))
-        target_bpm = float(request.json.get('target_bpm', 70))
+        patient_profile = user.patient_profile
+        if not patient_profile:
+            patient_profile = PatientProfile(
+                user_id=user.id,
+                condition='parkinsons'
+            )
+            db.session.add(patient_profile)
+            db.session.commit()
+
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
+        session_type = data.get('session_type', 'gait_trainer') or 'gait_trainer'
+
+        try:
+            initial_bpm = float(data.get('initial_bpm', 60))
+        except (ValueError, TypeError):
+            initial_bpm = 60.0
+
+        try:
+            target_bpm = float(data.get('target_bpm', 70))
+        except (ValueError, TypeError):
+            target_bpm = 70.0
 
         # Generate beats for stroke patients
         beat_url = None
         if patient_profile.condition == 'stroke':
-            beat_generator = BeatGenerator()
+            try:
+                beat_generator = BeatGenerator()
+                patient_condition = {
+                    'affected_side': patient_profile.stroke_affected_side,
+                    'severity': patient_profile.stroke_severity,
+                    'aphasia_type': patient_profile.aphasia_type,
+                    'dysarthria_severity': patient_profile.dysarthria_severity,
+                    'motor_impairment': patient_profile.motor_impairment_level,
+                    'cognitive_status': patient_profile.cognitive_status,
+                    'emotional_status': patient_profile.emotional_status,
+                    'preferred_genre': patient_profile.preferred_music_genre,
+                    'preferred_sound': patient_profile.preferred_beat_sound or 'metronome'
+                }
+                beat_url = beat_generator.generate_stroke_therapy_beat(session_type, int(initial_bpm), patient_condition)
+                optimal_bpm = beat_generator.get_optimal_bpm_for_stroke_therapy(session_type, patient_condition)
+                if abs(initial_bpm - optimal_bpm) > 10:
+                    initial_bpm = float(optimal_bpm)
+            except Exception as bg_err:
+                logging.warning(f"Beat generator fallback: {str(bg_err)}")
+                beat_url = f"local_audio:metronome:{int(initial_bpm)}"
 
-            # Get optimal BPM for stroke therapy
-            patient_condition = {
-                'affected_side': patient_profile.stroke_affected_side,
-                'severity': patient_profile.stroke_severity,
-                'aphasia_type': patient_profile.aphasia_type,
-                'dysarthria_severity': patient_profile.dysarthria_severity,
-                'motor_impairment': patient_profile.motor_impairment_level,
-                'cognitive_status': patient_profile.cognitive_status,
-                'emotional_status': patient_profile.emotional_status,
-                'preferred_genre': patient_profile.preferred_music_genre,
-                'preferred_sound': patient_profile.preferred_beat_sound or 'metronome'
-            }
-
-            # Generate therapeutic beat
-            beat_url = beat_generator.generate_stroke_therapy_beat(session_type, initial_bpm, patient_condition)
-
-            # Get optimal BPM suggestion
-            optimal_bpm = beat_generator.get_optimal_bpm_for_stroke_therapy(session_type, patient_condition)
-            if abs(initial_bpm - optimal_bpm) > 10:
-                initial_bpm = optimal_bpm
+        # Safe parsing of cognitive load level
+        raw_cog = data.get('cognitive_load_level')
+        try:
+            cog_level = int(raw_cog) if raw_cog is not None else 1
+        except (ValueError, TypeError):
+            cog_level = 1
 
         # Create new session
         therapy_session = TherapySession(
@@ -222,8 +281,8 @@ def start_session():
             target_bpm=target_bpm,
             start_time=datetime.utcnow(),
             generated_beat_url=beat_url,
-            affected_limb=request.json.get('affected_limb'),
-            cognitive_load_level=int(request.json.get('cognitive_load_level', 1))
+            affected_limb=data.get('affected_limb'),
+            cognitive_load_level=cog_level
         )
 
         db.session.add(therapy_session)
@@ -239,8 +298,9 @@ def start_session():
         })
 
     except Exception as e:
-        logging.error(f"Error starting session: {str(e)}")
-        return jsonify({'error': 'Failed to start session'}), 500
+        db.session.rollback()
+        logging.error(f"Error starting session: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to start session', 'details': str(e)}), 500
 
 @app.route('/session/<int:session_id>')
 def session_view(session_id):
@@ -269,49 +329,31 @@ def update_session():
         session_id = int(request.json.get('session_id'))
         current_bpm = float(request.json.get('current_bpm'))
         sync_accuracy = float(request.json.get('sync_accuracy', 0))
-        metrics_dict = request.json.get('metrics_data')
-
-        therapy_session = TherapySession.query.get(session_id)
-        min_bpm = 40.0
-        max_bpm = 120.0
-        if therapy_session:
-            if therapy_session.patient and therapy_session.patient.baseline_cadence:
-                min_bpm = max(40.0, therapy_session.patient.baseline_cadence * 0.75)
-            else:
-                min_bpm = max(40.0, therapy_session.initial_bpm * 0.75)
-            
-            if therapy_session.patient and therapy_session.patient.target_cadence:
-                max_bpm = min(160.0, therapy_session.patient.target_cadence * 1.15)
-            elif therapy_session.target_bpm:
-                max_bpm = min(160.0, therapy_session.target_bpm * 1.15)
-            
-            if metrics_dict:
-                therapy_session.set_metrics(metrics_dict)
-
-        # Deterministic adaptive controller:
-        # Low sync (< 65%) -> decrease BPM slightly
-        # Stable/improving (65% - 85%) -> hold BPM
-        # Consistently high sync (> 85%) -> increase BPM slightly, within limits
-        adjustment_bpm = current_bpm
-        if sync_accuracy < 65:
-            adjustment_bpm = max(min_bpm, current_bpm - 1.5)
-        elif sync_accuracy > 85:
-            adjustment_bpm = min(max_bpm, current_bpm + 1.0)
 
         # Add session metric
         metric = SessionMetrics(
             session_id=session_id,
             current_bpm=current_bpm,
             sync_accuracy=sync_accuracy,
-            adjustment_made=(adjustment_bpm != current_bpm),
             timestamp=datetime.utcnow()
         )
         db.session.add(metric)
+
+        # Calculate BPM adjustment based on accuracy
+        adjustment_bpm = current_bpm
+        if sync_accuracy < 70:  # If accuracy is low, slow down slightly
+            adjustment_bpm = max(current_bpm - 2, 40)
+        elif sync_accuracy > 90:  # If accuracy is high, speed up slightly
+            adjustment_bpm = min(current_bpm + 1, 120)
+
+        if adjustment_bpm != current_bpm:
+            metric.adjustment_made = True
+
         db.session.commit()
 
         return jsonify({
-            'adjusted_bpm': round(adjustment_bpm, 1),
-            'sync_accuracy': round(sync_accuracy, 1)
+            'adjusted_bpm': adjustment_bpm,
+            'sync_accuracy': sync_accuracy
         })
 
     except Exception as e:
@@ -320,52 +362,38 @@ def update_session():
 
 @app.route('/session/<int:session_id>/update', methods=['POST'])
 def update_session_legacy(session_id):
-    """Update session metrics in real-time (legacy id-in-path route)"""
+    """Update session metrics in real-time"""
     if 'user_id' not in session or session.get('user_type') != 'patient':
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
         current_bpm = float(request.json.get('current_bpm'))
         sync_accuracy = float(request.json.get('sync_accuracy', 0))
-        metrics_dict = request.json.get('metrics_data')
 
-        therapy_session = TherapySession.query.get(session_id)
-        min_bpm = 40.0
-        max_bpm = 120.0
-        if therapy_session:
-            if therapy_session.patient and therapy_session.patient.baseline_cadence:
-                min_bpm = max(40.0, therapy_session.patient.baseline_cadence * 0.75)
-            else:
-                min_bpm = max(40.0, therapy_session.initial_bpm * 0.75)
-            
-            if therapy_session.patient and therapy_session.patient.target_cadence:
-                max_bpm = min(160.0, therapy_session.patient.target_cadence * 1.15)
-            elif therapy_session.target_bpm:
-                max_bpm = min(160.0, therapy_session.target_bpm * 1.15)
-            
-            if metrics_dict:
-                therapy_session.set_metrics(metrics_dict)
-
-        # Deterministic adaptive controller:
-        adjustment_bpm = current_bpm
-        if sync_accuracy < 65:
-            adjustment_bpm = max(min_bpm, current_bpm - 1.5)
-        elif sync_accuracy > 85:
-            adjustment_bpm = min(max_bpm, current_bpm + 1.0)
-
+        # Add session metric
         metric = SessionMetrics(
             session_id=session_id,
             current_bpm=current_bpm,
             sync_accuracy=sync_accuracy,
-            adjustment_made=(adjustment_bpm != current_bpm),
             timestamp=datetime.utcnow()
         )
         db.session.add(metric)
+
+        # Calculate BPM adjustment based on accuracy
+        adjustment_bpm = current_bpm
+        if sync_accuracy < 70:  # If accuracy is low, slow down slightly
+            adjustment_bpm = max(current_bpm - 2, 40)
+        elif sync_accuracy > 90:  # If accuracy is high, speed up slightly
+            adjustment_bpm = min(current_bpm + 1, 120)
+
+        if adjustment_bpm != current_bpm:
+            metric.adjustment_made = True
+
         db.session.commit()
 
         return jsonify({
-            'adjusted_bpm': round(adjustment_bpm, 1),
-            'sync_accuracy': round(sync_accuracy, 1)
+            'adjusted_bpm': adjustment_bpm,
+            'sync_accuracy': sync_accuracy
         })
 
     except Exception as e:
@@ -386,105 +414,76 @@ def complete_session(session_id):
         if therapy_session.patient.user_id != user.id:
             return jsonify({'error': 'Unauthorized'}), 401
 
-        # Update session completion data with real metrics
+        # Update session completion data
         therapy_session.end_time = datetime.utcnow()
         therapy_session.completed = True
-        therapy_session.duration_seconds = int(request.json.get('duration', 0))
-        therapy_session.final_bpm = float(request.json.get('final_bpm', therapy_session.initial_bpm))
-        therapy_session.accuracy_score = float(request.json.get('accuracy_score', 0))
-        
-        metrics_dict = request.json.get('metrics_data')
-        if metrics_dict:
-            therapy_session.set_metrics(metrics_dict)
+        duration = int(request.json.get('duration', 0))
+        final_bpm = float(request.json.get('final_bpm', therapy_session.initial_bpm))
+        accuracy_score = float(request.json.get('accuracy_score', 0))
+        therapy_session.duration_seconds = duration
+        therapy_session.final_bpm = final_bpm
+        therapy_session.accuracy_score = accuracy_score
+        therapy_session.notes = request.json.get('notes', '')
 
-        base_notes = request.json.get('notes', '')
-
-        # Generate objective non-diagnostic summary strictly from measured metrics
-        duration_min = round(therapy_session.duration_seconds / 60, 1) if therapy_session.duration_seconds else 0
-        summary_parts = [
-            f"Session duration: {duration_min} min.",
-            f"Cadence: {round(therapy_session.initial_bpm)} -> {round(therapy_session.final_bpm)} BPM.",
-            f"Measured sync accuracy: {round(therapy_session.accuracy_score)}%."
-        ]
-        if metrics_dict and isinstance(metrics_dict, dict):
-            if metrics_dict.get('totalSteps'):
-                summary_parts.append(f"Detected {metrics_dict.get('totalSteps')} steps (mean timing offset {metrics_dict.get('meanAbsoluteErrorMs', 0)}ms).")
-            if metrics_dict.get('is_demo'):
-                summary_parts.append("[Session completed in DEMO MODE].")
-
-        summary_text = " ".join(summary_parts)
-
-        # Optional HF LLM summary if token is configured in environment
-        hf_token = os.environ.get("HUGGINGFACE_API_TOKEN")
-        if hf_token:
-            try:
-                import requests
-                hf_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-                prompt = (
-                    f"<s>[INST] You are an objective clinical recording assistant. Write a 2-sentence neutral, non-diagnostic summary "
-                    f"using strictly these measured values: Duration: {duration_min} minutes, Initial BPM: {therapy_session.initial_bpm}, "
-                    f"Final BPM: {therapy_session.final_bpm}, Sync Accuracy: {round(therapy_session.accuracy_score)}%. "
-                    f"Do not invent data. Do not diagnose. [/INST]"
-                )
-                headers = {"Authorization": f"Bearer {hf_token}"}
-                resp = requests.post(hf_url, headers=headers, json={"inputs": prompt, "parameters": {"max_new_tokens": 80}}, timeout=4)
-                if resp.status_code == 200:
-                    ai_res = resp.json()
-                    if isinstance(ai_res, list) and 'generated_text' in ai_res[0]:
-                        raw_gen = ai_res[0]['generated_text']
-                        if '[/INST]' in raw_gen:
-                            summary_text = raw_gen.split('[/INST]')[-1].strip()
-            except Exception as hf_err:
-                logging.warning(f"HF summary generation fallback: {hf_err}")
-
-        therapy_session.notes = f"{base_notes}\n\nClinical Summary: {summary_text}".strip() if base_notes else f"Clinical Summary: {summary_text}"
         db.session.commit()
 
-        return jsonify({'success': True, 'summary': summary_text})
-
-    except Exception as e:
-        logging.error(f"Error completing session: {str(e)}")
-        return jsonify({'error': 'Failed to complete session'}), 500
-
-@app.route('/api/motion/telemetry', methods=['POST'])
-def motion_telemetry():
-    """Real-time person movement analysis endpoint (for live HUD & backend AI consumption)"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    try:
-        data = request.get_json() or {}
-        session_id = data.get('session_id')
-        knee_angle = data.get('knee_angle_deg')
-        torso_angle = data.get('torso_angle_deg')
-        cadence_spm = data.get('cadence_spm')
-        symmetry_score = data.get('symmetry_score')
-        sync_error_ms = data.get('sync_error_ms')
-
-        # Real-time clinical interpretation
-        posture_status = "Optimal Upright" if (torso_angle and torso_angle < 8) else ("Mild Lean (" + str(torso_angle) + "°)" if torso_angle else "Tracking")
-        flexion_status = "Good Stride Amplitude" if (knee_angle and knee_angle < 145) else ("Moderate Flexion" if knee_angle else "Tracking")
-        symmetry_status = f"{round(symmetry_score)}% Balanced" if symmetry_score else "Calibrating"
+        # Generate personalized recovery coaching feedback via Gemini Few-Shot
+        from services.gemini_service import generate_patient_feedback_few_shot
+        feedback = generate_patient_feedback_few_shot(
+            therapy_session.session_type,
+            duration,
+            accuracy_score,
+            f"{round(therapy_session.initial_bpm)} -> {round(final_bpm)}"
+        )
 
         return jsonify({
-            'status': 'received',
-            'session_id': session_id,
-            'metrics': {
-                'knee_angle_deg': knee_angle,
-                'torso_angle_deg': torso_angle,
-                'cadence_spm': cadence_spm,
-                'symmetry_score': symmetry_score,
-                'sync_error_ms': sync_error_ms
-            },
-            'interpretation': {
-                'posture': posture_status,
-                'flexion': flexion_status,
-                'symmetry': symmetry_status
-            }
+            'success': True,
+            'feedback': feedback
         })
+
     except Exception as e:
-        logging.error(f"Error in motion telemetry: {e}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Error completing session: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to complete session'}), 500
+
+@app.route('/api/clinician/ai-report/<int:patient_id>', methods=['POST'])
+def generate_ai_report(patient_id):
+    """Generate clinical progress note and SOAP assessment via Gemini Few-Shot prompting"""
+    if 'user_id' not in session or session.get('user_type') != 'clinician':
+        return jsonify({'error': 'Unauthorized: Clinician access required'}), 401
+
+    try:
+        from services.gemini_service import generate_clinical_soap_note_few_shot
+        patient = PatientProfile.query.get_or_404(patient_id)
+
+        # Gather baseline metrics
+        baseline = {
+            'cadence': patient.baseline_cadence,
+            'tapping_speed': patient.baseline_tapping_speed,
+            'speech_rate': patient.baseline_speech_rate
+        }
+
+        # Gather last 8 completed sessions
+        completed_sessions = [s for s in patient.sessions if s.completed]
+        recent_sessions = [{
+            'date': s.start_time.strftime('%Y-%m-%d') if s.start_time else 'N/A',
+            'type': s.session_type,
+            'duration_min': round((s.duration_seconds or 0) / 60, 1),
+            'accuracy': round(s.accuracy_score or 0),
+            'bpm': round(s.final_bpm or s.initial_bpm or 60)
+        } for s in completed_sessions[-8:]]
+
+        report_result = generate_clinical_soap_note_few_shot(
+            f"{patient.user.first_name} {patient.user.last_name}",
+            patient.condition,
+            baseline,
+            recent_sessions
+        )
+
+        return jsonify(report_result)
+
+    except Exception as e:
+        logging.error(f"Error generating AI clinical report: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Failed to generate report', 'details': str(e)}), 500
 
 @app.route('/baseline/assessment', methods=['GET', 'POST'])
 def baseline_assessment():
